@@ -1,0 +1,19 @@
+body{
+    background-color: #329da8;
+}
+
+p{
+    font-family: Arial, Helvetica, sans-serif;
+    color: white;
+    text-align: center;
+}
+
+h1{
+    text-align: center;
+    color: white;
+    text-size-adjust: 24px;
+}
+
+h1.uppercase {
+  text-transform: uppercase;
+}
