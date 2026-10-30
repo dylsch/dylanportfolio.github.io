@@ -272,11 +272,12 @@ window.startBoozyLive = ctx => {
       <div>
         <div class="card">
           <div class="row" style="justify-content:space-between"><h2 style="margin:0">Players</h2><span class="pill ${game.open ? 'ok' : 'warn'}">${players.length} joined${game.open ? '' : ' · closed'}</span></div>
-          <p class="hint">Phones are showing: <b>${{ lobby: 'waiting screen', bingo: 'bingo card', quiz: 'quiz', mlt: "who's most likely to" }[game.mode] || game.mode}</b></p>
+          <p class="hint">Phones are showing: <b>${{ lobby: 'waiting screen', bingo: 'bingo card', quiz: 'quiz', mlt: "who's most likely to", letters: 'letter rush' }[game.mode] || game.mode}</b></p>
           <div class="row">
             <button class="btn${game.mode === 'bingo' ? ' primary' : ''}" data-mode="bingo" ${game.bingo.songs.length ? '' : 'disabled'}>🎵 Bingo</button>
             <button class="btn${game.mode === 'quiz' ? ' primary' : ''}" data-mode="quiz">🧠 Quiz</button>
             <button class="btn${game.mode === 'mlt' ? ' primary' : ''}" data-mode="mlt">🙋 Most likely to</button>
+            <button class="btn${game.mode === 'letters' ? ' primary' : ''}" data-mode="letters">🔤 Letter Rush</button>
             <button class="btn${game.mode === 'lobby' ? ' primary' : ''}" data-mode="lobby">⏸ Waiting screen</button>
           </div>
           <div class="lvplayers">${players.length ? players.map(p => {

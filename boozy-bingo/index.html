@@ -70,6 +70,16 @@ body:not(.is-admin) .admin-only { display: none; }
 .mlbar .mlt i { display: block; height: 100%; background: var(--muted); border-radius: 99px; transition: width .6s; }
 .mlbar.win .mlt i { background: var(--pink); }
 .mlbar.win .mln { font-weight: 700; }
+.lrletter { margin: 0 auto; width: clamp(110px, 16vw, 180px); aspect-ratio: 1; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); border-radius: 24px; font: 700 clamp(70px, 11vw, 130px) Fredoka, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.lrletter.pop { animation: lrpop .35s ease-out; }
+@keyframes lrpop { 0% { transform: scale(.6); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.lrgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.lrans { background: var(--bg); border: 2px solid var(--line); border-radius: 14px; color: var(--text); padding: 10px 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; cursor: pointer; font: 14px Inter, sans-serif; }
+.lrans b { font-size: 18px; word-break: break-word; }
+.lrans .who, .lrans .pts { color: var(--muted); font-size: 12px; }
+.lrans.unique { border-color: var(--green); } .lrans.unique .pts { color: var(--green); font-weight: 600; }
+.lrans.shared { border-color: var(--accent); } .lrans.shared .pts { color: var(--accent); font-weight: 600; }
+.lrans.wrong, .lrans.rejected, .lrans.blank { opacity: .6; } .lrans.rejected b, .lrans.wrong b { text-decoration: line-through; }
 .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
 .pack { background: var(--bg); border: 2px solid var(--line); border-radius: 14px; color: var(--text); padding: 12px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 14px Inter, sans-serif; }
 .pack:hover { border-color: var(--accent); }
@@ -325,10 +335,11 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="spotify" data-group="bingo"><span class="n">3</span>Spotify playlist</button>
     <button data-tab="host" data-group="bingo"><span class="n">4</span>Host the game</button>
     <button data-tab="live" data-group="bingo"><span class="n">5</span>📱 Play on phones</button>
-    <button data-tab="live" data-group="quiz mlt" hidden><span class="n">1</span>📱 Let players join</button>
+    <button data-tab="live" data-group="quiz mlt letters" hidden><span class="n">1</span>📱 Let players join</button>
     <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🧠 Run the quiz</button>
     <button data-tab="mlt" data-group="mlt" hidden><span class="n">2</span>🙋 Play</button>
-    <button data-tab="access" data-group="bingo quiz mlt access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
+    <button data-tab="letters" data-group="letters" hidden><span class="n">2</span>🔤 Play</button>
+    <button data-tab="access" data-group="bingo quiz mlt letters access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -483,6 +494,9 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   <!-- WHO'S MOST LIKELY TO (rendered by mlt.js) -->
   <section class="tab" id="tab-mlt"></section>
 
+  <!-- LETTER RUSH (rendered by letters.js) -->
+  <section class="tab" id="tab-letters"></section>
+
   <!-- LIVE GAME (rendered by live.js when signed in online) -->
   <section class="tab" id="tab-live">
     <div class="card">
@@ -522,6 +536,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <script src="quiz-packs.js"></script>
 <script src="quiz.js"></script>
 <script src="mlt.js"></script>
+<script src="letters.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="live.js"></script>
 <script>
@@ -530,6 +545,7 @@ window.startBoozyApp = () => {
   'use strict';
   window.startBoozyQuiz();
   window.startBoozyMlt();
+  window.startBoozyLetters();
 
   // ---------- Storage ----------
   const KEY = 'boozyBingo.v1';
@@ -733,6 +749,8 @@ Kanye West - Gold Digger`
       desc: '14 quiz packs from Halloween to Malta, with teams and speed points on phones.' },
     { id: 'mlt', emoji: '🙋', name: "Who's Most Likely To", tab: 'mlt', tags: ['📱 Phones', '👉 No phones needed'],
       desc: 'Everyone votes for who fits the prompt best. Most votes drinks.' },
+    { id: 'letters', emoji: '🔤', name: 'Letter Rush', tab: 'letters', tags: ['📱 Phones', '⏱ Timer', '👉 No phones needed'],
+      desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' },
     { id: 'access', emoji: '🔒', name: 'Access', tab: 'access', admin: true, tags: ['Only you see this'],
       desc: 'Approve or remove the people who can use Boozy Bingo.' }
   ];

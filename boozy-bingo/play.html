@@ -52,6 +52,13 @@ input:focus { outline: 2px solid var(--accent); }
 
 .qnum { color: var(--accent); font-weight: 600; font-size: 13px; }
 .mlwho { color: var(--accent); font: 600 16px Fredoka, sans-serif; margin: 8px 0 0; }
+.lrbig { margin: 6px auto 4px; width: 96px; height: 96px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); border-radius: 18px; font: 700 64px Fredoka, sans-serif; }
+.lrlist { display: grid; gap: 6px; margin-top: 12px; }
+.lrlist div { display: grid; grid-template-columns: 1fr 1.3fr auto; gap: 8px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.lrlist div.mine { border-color: var(--accent); }
+.lrlist span { color: var(--muted); font-size: 13px; }
+.lrlist b.wrong, .lrlist b.rejected { text-decoration: line-through; opacity: .6; }
+.lrlist b.unique { color: var(--green); } .lrlist b.shared { color: var(--accent); }
 .qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .qtime { font: 700 18px Fredoka, sans-serif; color: var(--accent); }
 .team { display: inline-block; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 0 8px; font-weight: 600; font-size: 12px; }

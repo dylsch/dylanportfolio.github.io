@@ -48,7 +48,13 @@ async function main() {
   setInterval(() => {
     const el = $('#qtime'), q = game && game.quiz;
     if (el && q && !q.revealed && q.timer) el.textContent = countdown(q);
+    const lt = $('#lrtime'), l = game && game.letters;
+    if (lt && l && !l.revealed) lt.textContent = lrCountdown(l);
   }, 500);
+  const lrCountdown = l => {
+    const left = Math.max(0, Math.ceil(l.timer - (Date.now() - (seenAt[l.key] || Date.now())) / 1000));
+    return left ? `⏱ ${left}s` : "⏰ Time's up";
+  };
 
   fs.onSnapshot(gameRef, snap => {
     game = snap.exists() ? snap.data() : null;
@@ -70,6 +76,14 @@ async function main() {
     $('#me').innerHTML = `${esc(me.name)}<br>${me.team ? `<span class="team">${esc(me.team)}</span>` : esc(game.title || '')}`;
 
     if (game.mode === 'mlt') { view.innerHTML = mltHtml(); bindMlt(); return; }
+    if (game.mode === 'letters') {
+      // Keep whatever the player is typing when the page re-renders.
+      const inp = $('#lrInput'), typed = inp ? inp.value : null, focused = inp && document.activeElement === inp;
+      view.innerHTML = lettersHtml(); bindLetters();
+      const now = $('#lrInput');
+      if (now && typed !== null) { now.value = typed; if (focused) now.focus(); }
+      return;
+    }
     const hasBingo = !!(me.card && game.bingo && game.bingo.songs && game.bingo.songs.length);
     if (!tab) tab = hasBingo ? 'bingo' : 'quiz';
     if (tab === 'bingo' && !hasBingo) tab = 'quiz';
@@ -172,6 +186,46 @@ async function main() {
       if (!m || m.revealed) return;
       fs.updateDoc(meRef, { [`answers.${m.key}`]: Number(b.dataset.vote) }).catch(e => alert(e.message));
     });
+  }
+
+  // ---------- Letter Rush ----------
+  function lettersHtml() {
+    const l = game.letters;
+    if (!l) return `<div class="card center"><div class="big">🔤</div><h2>Letter Rush</h2><p class="hint">Get ready! A letter and a category are coming up.</p></div>`;
+    const board = (l.board || []).length ? `<ol class="board">${l.board.map((b, i) =>
+      `<li class="${b.id === user.uid ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(b.name)}</span><b>${b.pts}</b></li>`).join('')}</ol>` : '';
+    if (l.done) return `<div class="card"><h2 class="center">🏆 Final scores</h2>${board || '<p class="hint center">Thanks for playing!</p>'}</div>`;
+    const head = `<div class="qhead"><span class="qnum">Round ${l.i + 1} / ${l.total}</span>${l.letter && !l.revealed ? `<span class="qtime" id="lrtime">${lrCountdown(l)}</span>` : ''}</div>
+      <h2 class="qq">${esc(l.category)}</h2><p class="mlwho">starting with</p><div class="lrbig">${l.letter || '?'}</div>`;
+    if (!l.letter) return `<div class="card center">${head}<p class="hint">Picking a letter…</p></div>`;
+    if (!seenAt[l.key]) seenAt[l.key] = Date.now();
+    const mine = me.answers ? me.answers[l.key] : undefined;
+    if (l.revealed) {
+      const res = l.results || [], my = res.find(r => r.id === user.uid);
+      const msg = !my ? '' : {
+        unique: `✅ Unique answer! +10`, shared: '🤝 Someone had the same answer: +5. Copycats sip! 🍺',
+        wrong: `❌ That doesn't start with ${esc(l.letter)}. Sip! 🍺`, rejected: '🙅 The host didn\'t accept that one. Sip! 🍺', blank: '⏰ No answer. Sip! 🍺'
+      }[my.status];
+      return `<div class="card">${head}${msg ? `<p class="sip">${msg}</p>` : ''}
+        <div class="lrlist">${res.map(r => `<div class="${r.id === user.uid ? 'mine' : ''}"><span>${esc(r.name)}</span><b class="${r.status}">${r.answer ? esc(r.answer) : '—'}</b><small>${r.pts ? '+' + r.pts : '0'}</small></div>`).join('')}</div>
+        ${board ? `<h3 class="center mt">Scores</h3>${board}` : ''}</div>`;
+    }
+    return `<div class="card">${head}
+      <input type="text" id="lrInput" maxlength="40" autocomplete="off" autocapitalize="words" placeholder="Your answer…" class="mt">
+      <button class="btn primary mt" id="lrSend">${mine ? 'Change answer' : 'Send'}</button>
+      <p class="hint center mt">${mine ? `✅ Locked in: <b>${esc(mine)}</b>. You can change it until time runs out.` : 'Unique answers score 10, answers someone else also gave score 5.'}</p></div>`;
+  }
+  function bindLetters() {
+    const btn = $('#lrSend'), inp = $('#lrInput');
+    if (!btn) return;
+    const send = () => {
+      const l = game.letters, v = inp.value.trim().slice(0, 40);
+      if (!l || l.revealed || !v) { inp.focus(); return; }
+      inp.value = '';
+      fs.updateDoc(meRef, { [`answers.${l.key}`]: v }).catch(e => alert(e.message));
+    };
+    btn.onclick = send;
+    inp.onkeydown = e => { if (e.key === 'Enter') send(); };
   }
 
   // ---------- Quiz ----------
