@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boozy Bingo</title>
+<meta name="description" content="Music bingo for parties: build a song list, generate printable bingo cards and create the Spotify playlist in one go.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1d1226;
+  --panel: #2a1b36;
+  --panel-2: #352245;
+  --line: #4a3360;
+  --text: #f6eefb;
+  --muted: #bba7c9;
+  --accent: #ffb238;
+  --accent-ink: #2a1600;
+  --pink: #ff5d8f;
+  --green: #1ed760;
+  --danger: #ff6b6b;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 Inter, system-ui, sans-serif;
+  min-height: 100vh;
+}
+h1, h2, h3 { font-family: Fredoka, Inter, sans-serif; font-weight: 600; margin: 0 0 .5em; }
+a { color: var(--accent); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px 64px; }
+
+header.top {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px 0 12px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand .logo { font-size: 34px; }
+.brand h1 { font-size: 30px; margin: 0; letter-spacing: .5px; }
+.brand h1 span { color: var(--accent); }
+.spotify-status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #6c5a78; display: inline-block; }
+.dot.on { background: var(--green); }
+
+nav.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
+nav.tabs button {
+  background: none; border: 0; color: var(--muted); font: 600 15px Fredoka, sans-serif;
+  padding: 10px 14px; border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap;
+}
+nav.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+nav.tabs button .n { display: inline-block; background: var(--panel-2); color: var(--muted); border-radius: 99px; font-size: 12px; padding: 0 7px; margin-right: 6px; }
+nav.tabs button.active .n { background: var(--accent); color: var(--accent-ink); }
+
+section.tab { display: none; }
+section.tab.active { display: block; }
+
+.grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
+@media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+}
+.card + .card { margin-top: 16px; }
+.card h2 { font-size: 20px; }
+.card h3 { font-size: 16px; }
+.hint { color: var(--muted); font-size: 13px; }
+label { display: block; font-weight: 500; margin: 12px 0 4px; font-size: 14px; }
+input[type=text], input[type=number], input[type=password], textarea, select {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 11px; font: inherit;
+}
+textarea { min-height: 300px; resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+textarea.short { min-height: 130px; font-family: inherit; font-size: 14px; }
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row > .grow { flex: 1; min-width: 140px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 14px; }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+button.btn {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 14px; font: 600 14px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+button.btn:hover { border-color: var(--accent); }
+button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.btn.spotify { background: var(--green); color: #04130a; border-color: var(--green); }
+button.btn.danger { color: var(--danger); }
+button.btn:disabled { opacity: .5; cursor: not-allowed; }
+.mt { margin-top: 14px; }
+
+.pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--panel-2); color: var(--muted); }
+.pill.ok { background: rgba(30,215,96,.15); color: var(--green); }
+.pill.warn { background: rgba(255,178,56,.15); color: var(--accent); }
+.pill.bad { background: rgba(255,107,107,.15); color: var(--danger); }
+
+.songlist { max-height: 340px; overflow: auto; margin-top: 10px; border-top: 1px solid var(--line); }
+.songlist div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.songlist .a { color: var(--muted); }
+
+.log { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: 12px ui-monospace, Menlo, monospace; max-height: 220px; overflow: auto; white-space: pre-wrap; margin-top: 12px; display: none; }
+.progress { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; margin-top: 12px; display: none; }
+.progress > div { height: 100%; width: 0; background: var(--green); transition: width .2s; }
+
+/* Bingo card (screen + print share structure) */
+.cards-preview { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
+.bcard { background: #fff; color: #1a1020; border-radius: 12px; padding: 12px; }
+.bcard .bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.bcard .btitle { font: 700 18px Fredoka, sans-serif; color: #6a1b9a; line-height: 1.1; }
+.bcard .bnum { font: 600 12px Inter, sans-serif; color: #6a1b9a; white-space: nowrap; }
+.bgrid { display: grid; gap: 3px; background: #6a1b9a; border: 3px solid #6a1b9a; border-radius: 6px; }
+.bcell {
+  background: #fff; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  text-align: center; padding: 3px; overflow: hidden; font-size: 10px; line-height: 1.15;
+}
+.bcell .t { font-weight: 700; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.bcell .ar { color: #6b5b77; font-size: .85em; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bcell.free { background: #ffe3a8; font: 700 13px Fredoka, sans-serif; color: #6a1b9a; }
+.bcell.free small { font: 500 9px Inter, sans-serif; display: block; }
+.bcell.hit { background: #ffd1e0; position: relative; }
+.bcell.hit::after { content: ""; position: absolute; inset: 14%; border: 3px solid #e91e63; border-radius: 50%; opacity: .8; }
+.brules { margin-top: 8px; font-size: 10px; color: #4b3a57; }
+.brules b { color: #6a1b9a; }
+.brules ul { margin: 2px 0 0; padding-left: 16px; columns: 2; column-gap: 18px; }
+.bfoot { font-size: 8.5px; color: #8a7a96; text-align: center; margin-top: 6px; }
+
+/* Host */
+.host-songs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 12px; }
+.hsong {
+  text-align: left; background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 10px;
+  padding: 8px 10px; cursor: pointer; font: 13px Inter, sans-serif;
+}
+.hsong .a { color: var(--muted); font-size: 12px; display: block; }
+.hsong.played { background: rgba(255,178,56,.16); border-color: var(--accent); }
+.hsong.played .t::before { content: "✓ "; color: var(--accent); }
+.nowplaying { display: flex; align-items: center; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 12px; }
+.nowplaying img { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; background: var(--panel-2); }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(150%);
+  background: var(--accent); color: var(--accent-ink); font: 600 15px Inter, sans-serif; padding: 12px 18px; border-radius: 12px;
+  transition: transform .25s; max-width: calc(100vw - 32px); z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.verdict { font: 700 22px Fredoka, sans-serif; margin: 10px 0; }
+.verdict.win { color: var(--green); }
+.verdict.no { color: var(--danger); }
+
+ol.steps { padding-left: 20px; margin: 8px 0; }
+ol.steps li { margin-bottom: 6px; }
+code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
+
+#printArea { display: none; }
+
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  body { background: #fff !important; color: #000; }
+  body > *:not(#printArea) { display: none !important; }
+  #printArea { display: block; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ppage { break-after: page; page-break-after: always; display: grid; gap: 6mm; height: 279mm; }
+  .ppage:last-child { break-after: auto; page-break-after: auto; }
+  .ppage.per-1 { grid-template-rows: minmax(0,1fr); }
+  .ppage.per-2 { grid-template-rows: repeat(2, minmax(0,1fr)); }
+  .ppage.per-4 { grid-template-columns: repeat(2, minmax(0,1fr)); grid-template-rows: repeat(2, minmax(0,1fr)); }
+  .ppage .bcard { border: 1.5px dashed #c9b6d6; border-radius: 0; padding: 4mm; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+  .ppage .bgrid { margin: 0 auto; }
+  .ppage.per-1 .bgrid { width: 180mm; }
+  .ppage.per-1 .bcell { font-size: 13pt; }
+  .ppage.per-1 .btitle { font-size: 28pt; }
+  .ppage.per-1 .brules { font-size: 11pt; }
+  .ppage.per-2 .bgrid { width: 94mm; }
+  .ppage.per-2 .bcell { font-size: 8pt; }
+  .ppage.per-2 .btitle { font-size: 16pt; }
+  .ppage.per-4 .bgrid { width: 84mm; }
+  .ppage.per-4 .bcell { font-size: 6.5pt; }
+  .ppage.per-4 .btitle { font-size: 12pt; }
+  .ppage.per-4 .brules { font-size: 6.5pt; }
+  .ppage .bhead, .ppage .brules, .ppage .bfoot { width: 100%; }
+  .caller h1 { font: 700 22pt Fredoka, sans-serif; color: #6a1b9a; margin-bottom: 4mm; }
+  .caller ol { columns: 2; column-gap: 10mm; font-size: 10pt; padding-left: 8mm; }
+  .caller li { break-inside: avoid; margin-bottom: 1.5mm; }
+  .caller li::marker { color: #6a1b9a; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div>
+    <div class="spotify-status"><span class="dot" id="spDot"></span><span id="spStatusText">Spotify not connected</span></div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="songs" class="active"><span class="n">1</span>Songs</button>
+    <button data-tab="cards"><span class="n">2</span>Bingo cards</button>
+    <button data-tab="spotify"><span class="n">3</span>Spotify playlist</button>
+    <button data-tab="host"><span class="n">4</span>Host the game</button>
+  </nav>
+
+  <!-- SONGS -->
+  <section class="tab active" id="tab-songs">
+    <div class="grid2">
+      <div class="card">
+        <h2>Song list</h2>
+        <p class="hint">One song per line as <b>Artist - Title</b>. Songs get shuffled onto the cards, and every song you list should end up in the playlist.</p>
+        <textarea id="songInput" spellcheck="false" placeholder="ABBA - Dancing Queen&#10;Whitney Houston - I Wanna Dance with Somebody&#10;..."></textarea>
+        <div class="row mt">
+          <button class="btn primary" id="saveSongs">Save song list</button>
+          <select id="presetSelect" style="width:auto"></select>
+          <button class="btn" id="loadPreset">Load starter pack</button>
+          <button class="btn danger" id="clearSongs">Clear</button>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Import a Spotify playlist</h2>
+          <p class="hint">Got a party playlist already? Paste its link and every track gets added to your list. You'll need to connect Spotify first (tab 3).</p>
+          <label for="importUrl">Playlist link</label>
+          <input type="text" id="importUrl" placeholder="https://open.spotify.com/playlist/...">
+          <div class="row mt">
+            <button class="btn spotify" id="importBtn">Import tracks</button>
+            <span class="check" style="margin:0"><input type="checkbox" id="importReplace"><span class="hint">Replace current list</span></span>
+          </div>
+          <div class="log" id="importLog"></div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between"><h2 style="margin:0">Saved songs</h2><span class="pill" id="songCountPill">0 songs</span></div>
+          <p class="hint" id="songAdvice"></p>
+          <div class="songlist" id="songPreview"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARDS -->
+  <section class="tab" id="tab-cards">
+    <div class="grid2">
+      <div class="card">
+        <h2>Card settings</h2>
+        <div class="fields">
+          <div style="grid-column: 1/-1"><label for="gameTitle">Game title</label><input type="text" id="gameTitle"></div>
+          <div><label for="cardCount">Number of cards</label><input type="number" id="cardCount" min="1" max="500"></div>
+          <div><label for="gridSize">Grid size</label>
+            <select id="gridSize"><option value="3">3 × 3</option><option value="4">4 × 4</option><option value="5">5 × 5</option></select></div>
+          <div><label for="perPage">Cards per A4 page</label>
+            <select id="perPage"><option value="1">1 (large)</option><option value="2">2</option><option value="4">4 (saves paper)</option></select></div>
+          <div><label for="showArtist">Square shows</label>
+            <select id="showArtist"><option value="both">Title + artist</option><option value="title">Title only</option><option value="artist">Artist only</option></select></div>
+          <div><label for="gameCode">Game code</label><input type="text" id="gameCode"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="freeSpace"> Free space in the centre (odd grids only)</label>
+        <label for="drinkRules">Drink rules (printed on every card, one per line)</label>
+        <textarea class="short" id="drinkRules"></textarea>
+        <div class="row mt">
+          <button class="btn primary" id="genCards">Generate cards</button>
+          <button class="btn" id="newCode">New game code</button>
+          <button class="btn" id="printCards">🖨️ Print cards</button>
+          <button class="btn" id="printCaller">🖨️ Print host sheet</button>
+        </div>
+        <p class="hint mt">The game code and song list together decide exactly what's on each card. Keep both unchanged once the cards are printed, so the app can check a winner's card from its number.</p>
+      </div>
+      <div class="card">
+        <h2>Status</h2>
+        <div id="cardStatus" class="hint">No cards generated yet.</div>
+      </div>
+    </div>
+    <div class="cards-preview" id="cardsPreview"></div>
+  </section>
+
+  <!-- SPOTIFY -->
+  <section class="tab" id="tab-spotify">
+    <div class="grid2">
+      <div>
+        <div class="card" id="spConnectCard">
+          <h2>Connect Spotify</h2>
+          <p class="hint">Spotify needs your own (free) developer app so this page can make playlists on your account. This is a one-time, two-minute setup:</p>
+          <ol class="steps hint">
+            <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> and log in.</li>
+            <li>Click <b>Create app</b>. Use any name, e.g. "Boozy Bingo".</li>
+            <li>Under <b>Redirect URIs</b>, add exactly:<br><code id="redirectUri"></code></li>
+            <li>Tick <b>Web API</b>, save, then copy the <b>Client ID</b> into the box below.</li>
+          </ol>
+          <label for="clientId">Client ID</label>
+          <input type="text" id="clientId" placeholder="e.g. 4f1c0b...">
+          <div class="row mt">
+            <button class="btn spotify" id="connectBtn">Connect Spotify</button>
+            <button class="btn danger" id="disconnectBtn" style="display:none">Disconnect</button>
+          </div>
+          <p class="hint mt">Your login stays in this browser only. Nothing is sent anywhere except Spotify.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Create the game playlist</h2>
+        <p class="hint">Every song in your list gets looked up on Spotify, and a new playlist is created in your account with the tracks in random order. Then play it on shuffle and you're the DJ.</p>
+        <label for="plName">Playlist name</label>
+        <input type="text" id="plName">
+        <label class="check"><input type="checkbox" id="plShuffle" checked> Shuffle the track order</label>
+        <label class="check"><input type="checkbox" id="plPublic"> Make the playlist public</label>
+        <div class="row mt">
+          <button class="btn spotify" id="createPl">Create playlist</button>
+          <a id="plLink" class="btn" style="display:none;text-decoration:none" target="_blank" rel="noopener">Open in Spotify ↗</a>
+        </div>
+        <div class="progress" id="plProgress"><div></div></div>
+        <div class="log" id="plLog"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOST -->
+  <section class="tab" id="tab-host">
+    <div class="grid2">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h2 style="margin:0">Songs played</h2>
+          <span class="pill warn" id="playedPill">0 played</span>
+        </div>
+        <p class="hint">Tap a song when it plays. If Spotify is connected, songs that come on get ticked off automatically.</p>
+        <div class="row">
+          <button class="btn spotify" id="autoTrack">▶ Auto-track Spotify</button>
+          <button class="btn" id="drinkBtn">🎲 Random drink dare</button>
+          <button class="btn danger" id="resetPlayed">Reset game</button>
+        </div>
+        <div class="nowplaying" id="nowPlaying" style="display:none"><img alt=""><div><div class="hint">Now playing</div><b class="t"></b><div class="hint a"></div></div></div>
+        <input type="text" id="hostFilter" class="mt" placeholder="Search songs…">
+        <div class="host-songs" id="hostSongs"></div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Check a bingo</h2>
+          <p class="hint">Someone shouts BINGO? Type in their card number to check it against the songs played so far.</p>
+          <div class="row">
+            <input type="number" id="checkNum" class="grow" min="1" placeholder="Card #">
+            <select id="checkMode" style="width:auto">
+              <option value="line">One line</option>
+              <option value="two">Two lines</option>
+              <option value="full">Full house</option>
+            </select>
+            <button class="btn primary" id="checkBtn">Check</button>
+          </div>
+          <div id="checkResult"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <p class="hint" style="text-align:center;margin-top:40px">🍻 Please drink responsibly. Water and soft drinks count as drinks too.</p>
+</div>
+
+<div id="printArea"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Storage ----------
+  const KEY = 'boozyBingo.v1';
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} }
+  };
+
+  const DEFAULT_RULES = [
+    'Mark a square → take a sip',
+    'Your song comes on and you missed it → 2 sips',
+    'Sing along to the chorus or drink',
+    'False BINGO → finish your drink',
+    'Someone gets a line → everyone else sips',
+    'Full house → the winner hands out 5 sips'
+  ];
+  const DARES = [
+    'Everyone with a 🍺 drinks!',
+    'Last person to stand up drinks',
+    'The host picks someone to take 2 sips',
+    'Waterfall! Start with whoever is youngest',
+    'Everyone wearing black drinks',
+    'Air guitar solo or 3 sips',
+    'Swap drinks with the person on your left (if they agree!)',
+    'Name the artist of the next song: wrong guess = sip',
+    'Dance until the chorus ends or drink',
+    'Cheers! Everyone drinks 🥂',
+    'Whoever has the most squares marked drinks',
+    'Quiet round: first person to talk drinks'
+  ];
+
+  const PRESETS = {
+    'Party anthems': `ABBA - Dancing Queen
+Whitney Houston - I Wanna Dance with Somebody (Who Loves Me)
+Queen - Don't Stop Me Now
+Bon Jovi - Livin' on a Prayer
+Journey - Don't Stop Believin'
+Gloria Gaynor - I Will Survive
+Earth, Wind & Fire - September
+Mark Ronson - Uptown Funk
+Pharrell Williams - Happy
+Justin Timberlake - CAN'T STOP THE FEELING!
+Spice Girls - Wannabe
+Backstreet Boys - Everybody (Backstreet's Back)
+Britney Spears - ...Baby One More Time
+Las Ketchup - The Ketchup Song (Aserejé)
+Los del Rio - Macarena
+Village People - Y.M.C.A.
+Europe - The Final Countdown
+Survivor - Eye of the Tiger
+Toto - Africa
+a-ha - Take On Me
+Cyndi Lauper - Girls Just Want to Have Fun
+Wham! - Wake Me Up Before You Go-Go
+Michael Jackson - Billie Jean
+Madonna - Like a Prayer
+The Killers - Mr. Brightside
+Oasis - Wonderwall
+Avicii - Wake Me Up
+David Guetta - Titanium
+Calvin Harris - Summer
+Rihanna - We Found Love
+Katy Perry - Firework
+Lady Gaga - Bad Romance
+Shakira - Hips Don't Lie
+Beyoncé - Crazy In Love
+OutKast - Hey Ya!
+Dua Lipa - Levitating
+The Weeknd - Blinding Lights
+Harry Styles - As It Was
+Lizzo - About Damn Time
+Daft Punk - Get Lucky
+Kylie Minogue - Can't Get You Out Of My Head
+Vengaboys - We like to Party! (The Vengabus)
+Bee Gees - Stayin' Alive
+Neil Diamond - Sweet Caroline
+The Proclaimers - I'm Gonna Be (500 Miles)`,
+    '90s & 00s': `Spice Girls - Wannabe
+Backstreet Boys - I Want It That Way
+*NSYNC - Bye Bye Bye
+Britney Spears - Toxic
+Christina Aguilera - Genie in a Bottle
+Destiny's Child - Survivor
+TLC - No Scrubs
+Eminem - Without Me
+Nelly - Hot In Herre
+Usher - Yeah!
+Black Eyed Peas - I Gotta Feeling
+Kelly Clarkson - Since U Been Gone
+Avril Lavigne - Complicated
+Blink-182 - All The Small Things
+Green Day - Basket Case
+Nirvana - Smells Like Teen Spirit
+Oasis - Don't Look Back In Anger
+Blur - Song 2
+The Verve - Bitter Sweet Symphony
+Chumbawamba - Tubthumping
+Aqua - Barbie Girl
+Eiffel 65 - Blue (Da Ba Dee)
+Haddaway - What Is Love
+Snap! - Rhythm Is a Dancer
+Ricky Martin - Livin' la Vida Loca
+Lou Bega - Mambo No. 5 (a Little Bit of...)
+Shania Twain - Man! I Feel Like A Woman!
+Robbie Williams - Angels
+S Club 7 - Reach
+Steps - 5,6,7,8
+Sean Paul - Get Busy
+Gwen Stefani - Hollaback Girl
+Beyoncé - Single Ladies (Put a Ring on It)
+Rihanna - Umbrella
+Amy Winehouse - Rehab
+The Killers - Mr. Brightside
+Coldplay - Yellow
+Outkast - Hey Ya!
+Gnarls Barkley - Crazy
+Kanye West - Gold Digger`
+  };
+
+  // ---------- State ----------
+  const defaults = {
+    songs: [],
+    title: 'Boozy Bingo',
+    count: 20,
+    grid: 5,
+    perPage: 2,
+    show: 'both',
+    free: true,
+    code: randomCode(),
+    rules: DEFAULT_RULES.join('\n'),
+    cards: [],
+    cardsKey: '',
+    played: [],
+    playlistName: '',
+    playlistUrl: ''
+  };
+  const state = Object.assign({}, defaults, store.get(KEY, {}));
+  const save = () => store.set(KEY, state);
+
+  // ---------- Helpers ----------
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\(.*?\)|\[.*?\]/g, '').replace(/ - .*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const songKey = s => norm(s.artist) + '|' + norm(s.title);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function randomCode() {
+    const w = ['GIN', 'RUM', 'TONIC', 'MOJITO', 'SPRITZ', 'NEGRONI', 'SHOT', 'CISK', 'LIMONCELLO', 'MARGARITA', 'PIMMS', 'SANGRIA'];
+    return w[Math.floor(Math.random() * w.length)] + '-' + Math.floor(1000 + Math.random() * 9000);
+  }
+  function toast(msg, ms = 3200) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  // Seeded RNG so a game code + song list always produces the same cards.
+  function hashStr(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+    return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; };
+  }
+  function mulberry32(a) {
+    return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  function shuffle(arr, rnd = Math.random) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+
+  function parseSongs(text) {
+    const out = [], seen = new Set();
+    for (let line of text.split(/\r?\n/)) {
+      line = line.trim().replace(/^\d+[.)]\s*/, '');
+      if (!line) continue;
+      let artist = '', title = line;
+      const m = line.match(/^(.+?)\s+[-–—]\s+(.+)$/) || line.match(/^(.+?)\t(.+)$/);
+      if (m) { artist = m[1].trim(); title = m[2].trim(); }
+      const s = { artist, title };
+      const k = songKey(s);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const prev = state.songs.find(p => songKey(p) === k);
+      if (prev && prev.uri) s.uri = prev.uri;
+      out.push(s);
+    }
+    return out;
+  }
+  const songsToText = songs => songs.map(s => s.artist ? `${s.artist} - ${s.title}` : s.title).join('\n');
+
+  // ---------- Tabs ----------
+  function showTab(name) {
+    $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    $$('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+    if (name === 'host') renderHost();
+    if (name === 'cards') renderCardStatus();
+    store.set('boozyBingo.tab', name);
+  }
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
+
+  // ---------- Songs tab ----------
+  function cellsNeeded() { const n = state.grid * state.grid; return n - (state.free && state.grid % 2 ? 1 : 0); }
+
+  function renderSongs() {
+    $('#songInput').value = songsToText(state.songs);
+    const n = state.songs.length, need = cellsNeeded();
+    const pill = $('#songCountPill');
+    pill.textContent = `${n} song${n === 1 ? '' : 's'}`;
+    pill.className = 'pill ' + (n >= need * 1.6 ? 'ok' : n >= need ? 'warn' : 'bad');
+    let adv;
+    if (n < need) adv = `You need at least ${need} songs for a ${state.grid}×${state.grid} card. Add ${need - n} more.`;
+    else if (n < need * 1.6) adv = `That's enough to make cards, but with so few songs, several people will win at the same time. Aim for ${Math.ceil(need * 2)} or more.`;
+    else adv = `Great. That's about ${Math.round(n * 3.5)} minutes of music if you play every song. Most games end well before that.`;
+    $('#songAdvice').textContent = adv;
+    $('#songPreview').innerHTML = state.songs.map((s, i) =>
+      `<div><span>${i + 1}. ${esc(s.title)} <span class="a">· ${esc(s.artist || '—')}</span></span>${s.uri ? '<span class="pill ok">on Spotify</span>' : ''}</div>`).join('');
+  }
+
+  function setSongs(songs) {
+    const changed = JSON.stringify(songs.map(songKey)) !== JSON.stringify(state.songs.map(songKey));
+    state.songs = songs;
+    if (changed) { state.played = state.played.filter(k => songs.some(s => songKey(s) === k)); }
+    save(); renderSongs();
+    if (changed && state.cards.length) toast('Song list changed. Regenerate your cards before printing.');
+  }
+
+  $('#saveSongs').onclick = () => { setSongs(parseSongs($('#songInput').value)); toast(`Saved ${state.songs.length} songs`); };
+  $('#clearSongs').onclick = () => { if (confirm('Clear the whole song list?')) setSongs([]); };
+  $('#presetSelect').innerHTML = Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join('');
+  $('#loadPreset').onclick = () => {
+    const name = $('#presetSelect').value;
+    if (state.songs.length && !confirm(`Replace your current list with "${name}"?`)) return;
+    setSongs(parseSongs(PRESETS[name]));
+    toast(`Loaded ${state.songs.length} songs`);
+  };
+
+  // ---------- Cards ----------
+  function cardsKey() {
+    return [state.code, state.grid, state.free, state.count, state.songs.map(songKey).join('~')].join('#');
+  }
+  function generateCards() {
+    const need = cellsNeeded();
+    if (state.songs.length < need) { toast(`You need at least ${need} songs. Add more in the Songs tab.`); return false; }
+    const keys = state.songs.map(songKey);
+    const seedFn = hashStr(state.code + '|' + state.grid + '|' + state.free);
+    const cards = [], seen = new Set();
+    for (let i = 0; i < state.count; i++) {
+      let pick, sig, tries = 0;
+      do {
+        const rnd = mulberry32(seedFn() ^ (i * 7919 + tries));
+        pick = shuffle(keys, rnd).slice(0, need);
+        sig = pick.slice().sort().join('~');
+        tries++;
+      } while (seen.has(sig) && tries < 60);
+      seen.add(sig);
+      cards.push(pick);
+    }
+    state.cards = cards;
+    state.cardsKey = cardsKey();
+    save();
+    return true;
+  }
+  const songByKey = k => state.songs.find(s => songKey(s) === k) || { title: k.split('|')[1], artist: k.split('|')[0] };
+
+  function cardHTML(card, idx, hits) {
+    const g = state.grid, center = (g % 2 && state.free) ? Math.floor(g * g / 2) : -1;
+    let cells = '', j = 0;
+    for (let c = 0; c < g * g; c++) {
+      if (c === center) { cells += `<div class="bcell free">FREE<small>Cheers! 🍹</small></div>`; continue; }
+      const k = card[j++]; const s = songByKey(k);
+      const hit = hits && hits.has(k) ? ' hit' : '';
+      let inner;
+      if (state.show === 'artist') inner = `<span class="t">${esc(s.artist || s.title)}</span>`;
+      else if (state.show === 'title') inner = `<span class="t">${esc(s.title)}</span>`;
+      else inner = `<span class="t">${esc(s.title)}</span>${s.artist ? `<span class="ar">${esc(s.artist)}</span>` : ''}`;
+      cells += `<div class="bcell${hit}">${inner}</div>`;
+    }
+    const rules = state.rules.split('\n').map(r => r.trim()).filter(Boolean);
+    return `<div class="bcard">
+      <div class="bhead"><div class="btitle">${esc(state.title)}</div><div class="bnum">Card #${idx + 1}</div></div>
+      <div class="bgrid" style="grid-template-columns:repeat(${g},1fr)">${cells}</div>
+      ${rules.length ? `<div class="brules"><b>Drink rules</b><ul>${rules.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>` : ''}
+      <div class="bfoot">Game ${esc(state.code)} · Mark songs as you hear them · Please drink responsibly</div>
+    </div>`;
+  }
+
+  function renderCardStatus() {
+    const el = $('#cardStatus');
+    if (!state.cards.length) { el.innerHTML = 'No cards generated yet. Set it up on the left and press <b>Generate cards</b>.'; $('#cardsPreview').innerHTML = ''; return; }
+    const stale = state.cardsKey !== cardsKey();
+    el.innerHTML = `<p><span class="pill ${stale ? 'warn' : 'ok'}">${stale ? 'Out of date' : 'Ready'}</span></p>
+      <p>${state.cards.length} unique ${state.grid}×${state.grid} cards from ${state.songs.length} songs.<br>Game code <b>${esc(state.code)}</b>.</p>
+      ${stale ? '<p>Settings or songs have changed since these cards were made. Press <b>Generate cards</b> again.</p>' : ''}
+      <p class="hint">Printing ${state.perPage} per page = ${Math.ceil(state.cards.length / state.perPage)} sheet(s) of A4.</p>`;
+    $('#cardsPreview').innerHTML = state.cards.slice(0, 6).map((c, i) => cardHTML(c, i)).join('') +
+      (state.cards.length > 6 ? `<div class="card hint" style="display:flex;align-items:center;justify-content:center">+ ${state.cards.length - 6} more cards will print</div>` : '');
+  }
+
+  function readCardSettings() {
+    state.title = $('#gameTitle').value.trim() || 'Boozy Bingo';
+    state.count = Math.max(1, Math.min(500, parseInt($('#cardCount').value, 10) || 20));
+    state.grid = parseInt($('#gridSize').value, 10);
+    state.perPage = parseInt($('#perPage').value, 10);
+    state.show = $('#showArtist').value;
+    state.free = $('#freeSpace').checked;
+    state.code = $('#gameCode').value.trim() || randomCode();
+    state.rules = $('#drinkRules').value;
+    save();
+  }
+  function fillCardSettings() {
+    $('#gameTitle').value = state.title; $('#cardCount').value = state.count; $('#gridSize').value = state.grid;
+    $('#perPage').value = state.perPage; $('#showArtist').value = state.show; $('#freeSpace').checked = state.free;
+    $('#gameCode').value = state.code; $('#drinkRules').value = state.rules;
+  }
+  $$('#tab-cards input, #tab-cards select, #tab-cards textarea').forEach(el =>
+    el.addEventListener('change', () => { readCardSettings(); renderSongs(); renderCardStatus(); }));
+
+  $('#genCards').onclick = () => { readCardSettings(); if (generateCards()) { renderCardStatus(); toast(`${state.cards.length} cards ready to print`); } };
+  $('#newCode').onclick = () => {
+    if (state.cards.length && !confirm('A new game code makes completely new cards. Cards you already printed will no longer match. Continue?')) return;
+    $('#gameCode').value = randomCode(); readCardSettings(); renderCardStatus();
+  };
+
+  function doPrint(html) {
+    $('#printArea').innerHTML = html;
+    const fire = () => setTimeout(() => window.print(), 50);
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(fire);
+  }
+  $('#printCards').onclick = () => {
+    readCardSettings();
+    if (!state.cards.length || state.cardsKey !== cardsKey()) { if (!generateCards()) return; renderCardStatus(); }
+    const per = state.perPage; let html = '';
+    for (let i = 0; i < state.cards.length; i += per) {
+      html += `<div class="ppage per-${per}">` + state.cards.slice(i, i + per).map((c, j) => cardHTML(c, i + j)).join('') + '</div>';
+    }
+    doPrint(html);
+  };
+  $('#printCaller').onclick = () => {
+    if (!state.songs.length) { toast('Add some songs first'); return; }
+    const list = state.songs.slice().sort((a, b) => a.title.localeCompare(b.title));
+    doPrint(`<div class="caller"><h1>${esc(state.title)}: host sheet</h1>
+      <p>Game ${esc(state.code)} · ${state.songs.length} songs · ${state.cards.length} cards</p>
+      <ol>${list.map(s => `<li>☐ <b>${esc(s.title)}</b>${s.artist ? ' · ' + esc(s.artist) : ''}</li>`).join('')}</ol></div>`);
+  };
+  window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
+
+  // ---------- Spotify (Authorization Code + PKCE, no server needed) ----------
+  const SP = {
+    redirect: location.origin + location.pathname,
+    scopes: 'playlist-modify-private playlist-modify-public playlist-read-private playlist-read-collaborative user-read-currently-playing user-read-playback-state',
+    get clientId() { return store.get('boozyBingo.clientId', ''); },
+    get token() { return store.get('boozyBingo.token', null); },
+    set token(v) { v ? store.set('boozyBingo.token', v) : store.del('boozyBingo.token'); },
+    user: null
+  };
+  $('#redirectUri').textContent = SP.redirect;
+  $('#clientId').value = SP.clientId;
+
+  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  async function spConnect() {
+    const id = $('#clientId').value.trim();
+    if (!id) { toast('Paste your Spotify Client ID first'); return; }
+    store.set('boozyBingo.clientId', id);
+    const verifier = b64url(crypto.getRandomValues(new Uint8Array(64)));
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    const st = b64url(crypto.getRandomValues(new Uint8Array(16)));
+    store.set('boozyBingo.pkce', { verifier, state: st, tab: 'spotify' });
+    const p = new URLSearchParams({ response_type: 'code', client_id: id, scope: SP.scopes, redirect_uri: SP.redirect, code_challenge_method: 'S256', code_challenge: challenge, state: st });
+    location.href = 'https://accounts.spotify.com/authorize?' + p;
+  }
+
+  async function tokenRequest(params) {
+    const r = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params)
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error_description || j.error || 'Token request failed');
+    const prev = SP.token || {};
+    SP.token = { access: j.access_token, refresh: j.refresh_token || prev.refresh, exp: Date.now() + (j.expires_in - 60) * 1000 };
+  }
+
+  async function handleRedirect() {
+    const q = new URLSearchParams(location.search);
+    if (!q.has('code') && !q.has('error')) return;
+    const pk = store.get('boozyBingo.pkce', null);
+    history.replaceState(null, '', SP.redirect);
+    store.del('boozyBingo.pkce');
+    if (q.has('error')) { toast('Spotify login cancelled: ' + q.get('error')); return; }
+    if (!pk || pk.state !== q.get('state')) { toast('Spotify login failed (state mismatch). Please try again.'); return; }
+    try {
+      await tokenRequest({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: SP.redirect, client_id: SP.clientId, code_verifier: pk.verifier });
+      store.set('boozyBingo.tab', pk.tab || 'spotify');
+    } catch (e) { toast('Spotify login failed: ' + e.message, 6000); }
+  }
+
+  async function accessToken() {
+    const t = SP.token;
+    if (!t) throw new Error('Connect Spotify first (tab 3)');
+    if (Date.now() < t.exp) return t.access;
+    if (!t.refresh) { SP.token = null; throw new Error('Spotify session expired. Please connect again.'); }
+    try { await tokenRequest({ grant_type: 'refresh_token', refresh_token: t.refresh, client_id: SP.clientId }); }
+    catch (e) { SP.token = null; renderSpotify(); throw new Error('Spotify session expired. Please connect again.'); }
+    return SP.token.access;
+  }
+
+  async function api(path, opts = {}, attempt = 0) {
+    const url = path.startsWith('http') ? path : 'https://api.spotify.com/v1' + path;
+    const r = await fetch(url, {
+      method: opts.method || 'GET',
+      headers: { Authorization: 'Bearer ' + await accessToken(), ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    });
+    if (r.status === 429 && attempt < 5) { await sleep((parseInt(r.headers.get('Retry-After'), 10) || 2) * 1000); return api(path, opts, attempt + 1); }
+    if (r.status === 401 && attempt < 1) { const t = SP.token; if (t) { t.exp = 0; SP.token = t; } return api(path, opts, attempt + 1); }
+    if (r.status === 204) return null;
+    const j = await r.json().catch(() => null);
+    if (!r.ok) { const err = new Error((j && j.error && j.error.message) || `Spotify error ${r.status}`); err.status = r.status; throw err; }
+    return j;
+  }
+  // Spotify has been renaming endpoints (e.g. /tracks → /items); try the newest first, fall back to the older one.
+  async function apiFallback(paths, opts) {
+    let last;
+    for (const p of paths) {
+      try { return await api(p, opts); }
+      catch (e) { last = e; if (![403, 404, 405, 410].includes(e.status)) throw e; }
+    }
+    throw last;
+  }
+
+  async function renderSpotify() {
+    const connected = !!SP.token;
+    $('#spDot').classList.toggle('on', connected);
+    $('#connectBtn').textContent = connected ? 'Reconnect' : 'Connect Spotify';
+    $('#disconnectBtn').style.display = connected ? '' : 'none';
+    if (!connected) { $('#spStatusText').textContent = 'Spotify not connected'; return; }
+    $('#spStatusText').textContent = 'Spotify connected';
+    try {
+      SP.user = SP.user || await api('/me');
+      $('#spStatusText').textContent = 'Spotify: ' + (SP.user.display_name || SP.user.id);
+    } catch (e) {
+      $('#spStatusText').textContent = 'Spotify: ' + e.message;
+    }
+  }
+  $('#connectBtn').onclick = spConnect;
+  $('#disconnectBtn').onclick = () => { SP.token = null; SP.user = null; stopAuto(); renderSpotify(); toast('Disconnected from Spotify'); };
+
+  function logTo(el, msg) { el.style.display = 'block'; el.textContent += msg + '\n'; el.scrollTop = el.scrollHeight; }
+
+  async function findTrack(s) {
+    const tries = [];
+    if (s.artist) tries.push(`track:${s.title} artist:${s.artist}`);
+    tries.push(`${s.artist} ${s.title}`.trim());
+    for (const q of tries) {
+      const j = await api('/search?' + new URLSearchParams({ q, type: 'track', limit: '10' }));
+      const items = (j && j.tracks && j.tracks.items) || [];
+      if (!items.length) continue;
+      const nt = norm(s.title), na = norm(s.artist);
+      const score = t => (norm(t.name) === nt ? 3 : norm(t.name).includes(nt) || nt.includes(norm(t.name)) ? 2 : 0)
+        + (na && t.artists.some(a => norm(a.name) === na || norm(a.name).includes(na) || na.includes(norm(a.name))) ? 2 : 0)
+        + (t.popularity || 0) / 200;
+      const best = items.slice().sort((a, b) => score(b) - score(a))[0];
+      if (score(best) >= 2) return best;
+    }
+    return null;
+  }
+
+  $('#createPl').onclick = async () => {
+    const btn = $('#createPl'), log = $('#plLog'), prog = $('#plProgress'), bar = prog.firstElementChild;
+    if (!SP.token) { toast('Connect Spotify first'); return; }
+    if (!state.songs.length) { toast('Add songs in the Songs tab first'); return; }
+    btn.disabled = true; log.textContent = ''; prog.style.display = 'block'; bar.style.width = '0';
+    $('#plLink').style.display = 'none';
+    try {
+      const uris = [], missing = [];
+      for (let i = 0; i < state.songs.length; i++) {
+        const s = state.songs[i];
+        if (!s.uri) {
+          const t = await findTrack(s);
+          if (t) { s.uri = t.uri; logTo(log, `✓ ${s.title} → ${t.name} · ${t.artists.map(a => a.name).join(', ')}`); }
+          else { missing.push(s); logTo(log, `✗ Not found: ${s.artist} - ${s.title}`); }
+        }
+        if (s.uri) uris.push(s.uri);
+        bar.style.width = (80 * (i + 1) / state.songs.length) + '%';
+      }
+      save(); renderSongs();
+      if (!uris.length) throw new Error('No songs could be found on Spotify');
+      const name = $('#plName').value.trim() || `${state.title} · ${state.code}`;
+      const body = { name, public: $('#plPublic').checked, description: `Boozy Bingo game ${state.code}. ${uris.length} songs. Play on shuffle!` };
+      const me = SP.user || await api('/me');
+      const pl = await apiFallback(['/me/playlists', `/users/${encodeURIComponent(me.id)}/playlists`], { method: 'POST', body });
+      const order = $('#plShuffle').checked ? shuffle(uris) : uris;
+      for (let i = 0; i < order.length; i += 100) {
+        await apiFallback([`/playlists/${pl.id}/items`, `/playlists/${pl.id}/tracks`], { method: 'POST', body: { uris: order.slice(i, i + 100) } });
+        bar.style.width = (80 + 20 * Math.min(1, (i + 100) / order.length)) + '%';
+      }
+      state.playlistName = name; state.playlistUrl = pl.external_urls && pl.external_urls.spotify; save();
+      logTo(log, `\n🎉 Created "${name}" with ${order.length} tracks.` + (missing.length ? `\n${missing.length} song(s) not found. Fix their spelling in the Songs tab, or remove them so nobody has an unplayable square.` : ''));
+      if (state.playlistUrl) { const a = $('#plLink'); a.href = state.playlistUrl; a.style.display = ''; }
+      toast('Playlist created! 🎶');
+    } catch (e) {
+      logTo(log, '\n⚠️ ' + e.message);
+      toast(e.message, 6000);
+    } finally { btn.disabled = false; }
+  };
+
+  $('#importBtn').onclick = async () => {
+    const log = $('#importLog'); log.textContent = '';
+    const m = $('#importUrl').value.match(/playlist[/:]([A-Za-z0-9]+)/);
+    if (!m) { toast('That doesn\'t look like a Spotify playlist link'); return; }
+    if (!SP.token) { toast('Connect Spotify first (tab 3)'); showTab('spotify'); return; }
+    try {
+      const got = [];
+      let next = null, first = true;
+      while (first || next) {
+        const page = first
+          ? await apiFallback([`/playlists/${m[1]}/items?limit=50`, `/playlists/${m[1]}/tracks?limit=50`])
+          : await api(next);
+        first = false;
+        for (const it of page.items || []) {
+          const t = it.item || it.track;
+          if (!t || t.type === 'episode' || !t.name) continue;
+          got.push({ artist: (t.artists || []).map(a => a.name)[0] || '', title: t.name, uri: t.uri });
+        }
+        next = page.next;
+        logTo(log, `Fetched ${got.length} tracks…`);
+      }
+      const base = $('#importReplace').checked ? [] : state.songs.slice();
+      const keys = new Set(base.map(songKey));
+      let added = 0;
+      for (const s of got) { const k = songKey(s); if (!keys.has(k)) { keys.add(k); base.push(s); added++; } }
+      setSongs(base);
+      logTo(log, `Added ${added} new songs (${got.length - added} duplicates skipped).`);
+      toast(`Imported ${added} songs`);
+    } catch (e) { logTo(log, '⚠️ ' + e.message); toast(e.message, 6000); }
+  };
+
+  // ---------- Host ----------
+  const playedSet = () => new Set(state.played);
+  function markPlayed(k, on = true) {
+    const has = state.played.includes(k);
+    if (on && !has) state.played.push(k);
+    if (!on && has) state.played = state.played.filter(x => x !== k);
+    save(); renderHost();
+  }
+  function renderHost() {
+    const f = norm($('#hostFilter').value || '');
+    const ps = playedSet();
+    $('#playedPill').textContent = `${state.played.length} / ${state.songs.length} played`;
+    const list = state.songs.filter(s => !f || norm(s.title + ' ' + s.artist).includes(f));
+    $('#hostSongs').innerHTML = list.length ? list.map(s => {
+      const k = songKey(s);
+      return `<button class="hsong${ps.has(k) ? ' played' : ''}" data-k="${esc(k)}"><span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></button>`;
+    }).join('') : '<p class="hint">No songs yet. Add some in the Songs tab.</p>';
+  }
+  $('#hostSongs').addEventListener('click', e => {
+    const b = e.target.closest('.hsong'); if (!b) return;
+    const k = b.dataset.k; markPlayed(k, !state.played.includes(k));
+  });
+  $('#hostFilter').addEventListener('input', renderHost);
+  $('#resetPlayed').onclick = () => { if (confirm('Clear all played songs and start a new round?')) { state.played = []; save(); renderHost(); $('#checkResult').innerHTML = ''; } };
+  $('#drinkBtn').onclick = () => toast('🎲 ' + DARES[Math.floor(Math.random() * DARES.length)], 5000);
+
+  let autoTimer = null, lastTrackId = null;
+  function stopAuto() { clearInterval(autoTimer); autoTimer = null; $('#autoTrack').textContent = '▶ Auto-track Spotify'; }
+  async function pollNowPlaying() {
+    try {
+      const j = await api('/me/player/currently-playing');
+      const np = $('#nowPlaying');
+      const t = j && (j.item);
+      if (!t) { np.style.display = 'none'; return; }
+      np.style.display = 'flex';
+      $('img', np).src = (t.album && t.album.images && t.album.images.length) ? t.album.images[t.album.images.length - 1].url : '';
+      $('.t', np).textContent = t.name; $('.a', np).textContent = (t.artists || []).map(a => a.name).join(', ');
+      if (t.id === lastTrackId) return;
+      lastTrackId = t.id;
+      const s = state.songs.find(s => s.uri === t.uri) ||
+        state.songs.find(s => norm(s.title) === norm(t.name) && (!s.artist || (t.artists || []).some(a => norm(a.name) === norm(s.artist))));
+      if (s && !state.played.includes(songKey(s))) { markPlayed(songKey(s)); toast(`🎵 ${s.title}: mark it & sip!`); }
+    } catch (e) { stopAuto(); toast(e.message, 5000); }
+  }
+  $('#autoTrack').onclick = () => {
+    if (autoTimer) { stopAuto(); return; }
+    if (!SP.token) { toast('Connect Spotify first (tab 3)'); return; }
+    pollNowPlaying(); autoTimer = setInterval(pollNowPlaying, 5000);
+    $('#autoTrack').textContent = '⏸ Stop auto-track';
+  };
+
+  function lines(g) {
+    const L = [];
+    for (let r = 0; r < g; r++) L.push([...Array(g)].map((_, c) => r * g + c));
+    for (let c = 0; c < g; c++) L.push([...Array(g)].map((_, r) => r * g + c));
+    L.push([...Array(g)].map((_, i) => i * g + i));
+    L.push([...Array(g)].map((_, i) => i * g + (g - 1 - i)));
+    return L;
+  }
+  $('#checkBtn').onclick = () => {
+    const out = $('#checkResult');
+    const n = parseInt($('#checkNum').value, 10);
+    if (!state.cards.length) { out.innerHTML = '<p class="hint">No cards generated yet.</p>'; return; }
+    if (state.cardsKey !== cardsKey()) { out.innerHTML = '<p class="verdict no">Cards are out of date</p><p class="hint">The songs or settings changed after the cards were made, so this check could be wrong.</p>'; }
+    else out.innerHTML = '';
+    if (!n || n < 1 || n > state.cards.length) { out.innerHTML += `<p class="hint">Enter a card number from 1 to ${state.cards.length}.</p>`; return; }
+    const card = state.cards[n - 1], g = state.grid, center = (g % 2 && state.free) ? Math.floor(g * g / 2) : -1;
+    const ps = playedSet(); const marked = []; let j = 0;
+    for (let c = 0; c < g * g; c++) marked.push(c === center ? true : ps.has(card[j++]));
+    const done = lines(g).filter(l => l.every(i => marked[i])).length;
+    const full = marked.every(Boolean);
+    const mode = $('#checkMode').value;
+    const win = mode === 'full' ? full : mode === 'two' ? done >= 2 : done >= 1;
+    out.innerHTML += `<p class="verdict ${win ? 'win' : 'no'}">${win ? '🎉 BINGO! Valid win' : '🙅 Not yet: false bingo, drink up!'}</p>
+      <p class="hint">${marked.filter(Boolean).length}/${g * g} squares heard · ${done} complete line${done === 1 ? '' : 's'}${full ? ' · FULL HOUSE' : ''}</p>
+      ${cardHTML(card, n - 1, ps)}`;
+  };
+
+  // ---------- Init ----------
+  (async () => {
+    await handleRedirect();
+    fillCardSettings();
+    renderSongs();
+    renderCardStatus();
+    $('#plName').value = state.playlistName || '';
+    $('#plName').placeholder = `${state.title} · ${state.code}`;
+    if (state.playlistUrl) { const a = $('#plLink'); a.href = state.playlistUrl; a.style.display = ''; }
+    showTab(store.get('boozyBingo.tab', 'songs'));
+    renderSpotify();
+  })();
+})();
+</script>
+</body>
+</html>
