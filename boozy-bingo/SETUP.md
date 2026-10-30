@@ -6,7 +6,7 @@ Boozy Bingo only opens for your Google account. Anyone else who signs in can sen
 1. Go to <https://console.firebase.google.com> and click **Create a project**. Any name works, e.g. `boozy-bingo`. You can turn Google Analytics off.
 2. On the project home page, click the **Web** icon (`</>`) to add a web app. Give it a nickname. Skip Hosting.
 3. Firebase shows a `firebaseConfig` block. Copy `apiKey`, `authDomain`, `projectId` and `appId` into `firebase-config.js`.
-4. In the same file, set `BOOZY_ADMIN_EMAIL` to your Gmail address.
+4. In the same file, set `BOOZY_ADMIN_EMAIL` to your Gmail address and `BOOZY_LOGIN_ENABLED` to `true`.
 
 ## 2. Turn on Google sign-in
 1. **Build → Authentication → Get started → Sign-in method → Google → Enable**, then save.

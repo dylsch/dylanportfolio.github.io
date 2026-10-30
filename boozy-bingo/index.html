@@ -1044,6 +1044,16 @@ Kanye West - Gold Digger`
 };
 </script>
 <script src="firebase-config.js"></script>
-<script type="module" src="gate.js"></script>
+<script>
+// The Google login switch lives in firebase-config.js. With it off, the app opens straight away
+// (this also works when index.html is opened directly from disk, where module scripts can't load).
+if (window.BOOZY_LOGIN_ENABLED) {
+  const s = document.createElement('script'); s.type = 'module'; s.src = 'gate.js'; document.body.appendChild(s);
+} else {
+  document.getElementById('gate').hidden = true;
+  document.getElementById('app').hidden = false;
+  window.startBoozyApp();
+}
+</script>
 </body>
 </html>
