@@ -158,6 +158,33 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 #printArea { display: none; }
 [hidden] { display: none !important; }
 
+/* Halloween quiz */
+#tab-quiz:fullscreen { background: var(--bg); padding: 24px; overflow: auto; }
+.qstage { background: radial-gradient(circle at 50% 0, #3b2150, var(--panel) 70%); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; min-height: 70vh; display: flex; flex-direction: column; gap: 18px; }
+#tab-quiz:fullscreen .qstage { min-height: calc(100vh - 48px); }
+.qtop { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qtime { font: 700 22px Fredoka, sans-serif; color: var(--accent); }
+.qtime.low { color: var(--danger); }
+.qq { font-size: clamp(24px, 4vw, 44px); text-align: center; line-height: 1.2; margin: 10px 0; }
+.qopts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .qopts { grid-template-columns: 1fr; } }
+.qopt { display: flex; align-items: center; gap: 14px; background: var(--bg); border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px; font-size: clamp(16px, 2.2vw, 26px); font-weight: 600; transition: opacity .3s, border-color .3s, background .3s; }
+.qopt b { flex: none; width: 1.8em; height: 1.8em; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 .9em Fredoka, sans-serif; }
+.qopt.correct { border-color: var(--green); background: rgba(30,215,96,.15); }
+.qopt.correct b { background: var(--green); color: #04130a; }
+.qopt.dim { opacity: .35; }
+.qreveal { text-align: center; font-size: 17px; }
+.qreveal p { margin: 6px 0; }
+.qsip { font: 600 20px Fredoka, sans-serif; color: var(--pink); text-align: center; }
+.qwho { justify-content: center; margin-top: 8px; }
+.qnav { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; }
+.qnav .btn { font-size: 16px; padding: 12px 18px; }
+.qboard { list-style: none; padding: 0; margin: 0 auto; width: min(520px, 100%); counter-reset: r; }
+.qboard li { counter-increment: r; display: flex; justify-content: space-between; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; font-size: 19px; }
+.qboard li::before { content: counter(r) "."; color: var(--muted); margin-right: 10px; }
+.qboard li span { flex: 1; }
+.qboard li.win { border-color: var(--accent); background: rgba(255,178,56,.12); }
+
 /* Access gate */
 .gatebox { max-width: 460px; margin: 8vh auto 0; text-align: center; }
 .gatebox .big { font-size: 46px; margin-bottom: 6px; }
@@ -207,6 +234,17 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   .caller ol { columns: 2; column-gap: 10mm; font-size: 10pt; padding-left: 8mm; }
   .caller li { break-inside: avoid; margin-bottom: 1.5mm; }
   .caller li::marker { color: #6a1b9a; }
+  .qsheet { break-after: page; page-break-after: always; font-family: Inter, sans-serif; color: #1a1020; }
+  .qsheet:last-child { break-after: auto; page-break-after: auto; }
+  .qsheet h1 { font: 700 24pt Fredoka, sans-serif; color: #d35400; margin-bottom: 3mm; }
+  .qsheet .qname { font-size: 13pt; border-bottom: 1.5px solid #999; padding-bottom: 2mm; margin-bottom: 5mm; }
+  .qsheet .qname span { font-weight: 700; }
+  .qsheet ol { columns: 2; column-gap: 14mm; font-size: 13pt; padding-left: 9mm; margin: 0; }
+  .qsheet li { break-inside: avoid; margin-bottom: 3.2mm; }
+  .qsheet li i { font-style: normal; display: inline-block; width: 8mm; height: 8mm; line-height: 7.5mm; text-align: center; border: 1.5px solid #d35400; border-radius: 50%; margin-right: 3mm; font-size: 10pt; color: #d35400; }
+  .qsheet.key ol { columns: 1; font-size: 10.5pt; }
+  .qsheet.key li { margin-bottom: 2.5mm; }
+  .qsheet .qfoot { font-size: 9pt; color: #777; margin-top: 6mm; text-align: center; }
 }
 </style>
 </head>
@@ -230,6 +268,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="cards"><span class="n">2</span>Bingo cards</button>
     <button data-tab="spotify"><span class="n">3</span>Spotify playlist</button>
     <button data-tab="host"><span class="n">4</span>Host the game</button>
+    <button data-tab="quiz">🎃 Quiz</button>
     <button data-tab="access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
@@ -379,6 +418,9 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     </div>
   </section>
 
+  <!-- HALLOWEEN QUIZ (rendered by quiz.js) -->
+  <section class="tab" id="tab-quiz"></section>
+
   <!-- ACCESS (admin only) -->
   <section class="tab" id="tab-access">
     <div class="grid2">
@@ -407,10 +449,12 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <div id="printArea"></div>
 <div class="toast" id="toast"></div>
 
+<script src="quiz.js"></script>
 <script>
 // The app only starts once the access gate (module script below) confirms the signed-in user is allowed.
 window.startBoozyApp = () => {
   'use strict';
+  window.startBoozyQuiz();
 
   // ---------- Storage ----------
   const KEY = 'boozyBingo.v1';
