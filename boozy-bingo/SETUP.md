@@ -6,7 +6,7 @@ Boozy Bingo only opens for your Google account. Anyone else who signs in can sen
 1. Go to <https://console.firebase.google.com> and click **Create a project**. Any name works, e.g. `boozy-bingo`. You can turn Google Analytics off.
 2. On the project home page, click the **Web** icon (`</>`) to add a web app. Give it a nickname. Skip Hosting.
 3. Firebase shows a `firebaseConfig` block. Copy `apiKey`, `authDomain`, `projectId` and `appId` into `firebase-config.js`.
-4. In the same file, set `BOOZY_ADMIN_EMAIL` to your Gmail address. Leave `BOOZY_LOGIN_ENABLED` as `true`.
+4. Leave `BOOZY_LOGIN_ENABLED` as `true`. Your email does **not** go in this file: it only goes in the Firestore rules (step 3), which stay private in the Firebase console.
 
 ## 2. Turn on Google sign-in
 1. **Build → Authentication → Get started → Sign-in method → Google → Enable**, then save.
@@ -15,7 +15,7 @@ Boozy Bingo only opens for your Google account. Anyone else who signs in can sen
 ## 3. Create the database and lock it down
 1. **Build → Firestore Database → Create database**. Pick a European location (e.g. `eur3` or `europe-west1`) and start in **production mode**.
 2. Open the **Rules** tab and replace everything with the contents of `firestore.rules`.
-3. Change `YOUR_EMAIL@gmail.com` in the rules to the same email you used in step 1.4, then click **Publish**.
+3. Change `YOUR_EMAIL@gmail.com` in the rules to your Gmail address, then click **Publish**. That account becomes the owner.
 
 ## 4. Push and test
 Commit `firebase-config.js` and push. Open the page, sign in with your account, and the app opens. To try the request flow, sign in from a private window with a different Google account and send a request. It appears in your **Access** tab within a second, with a counter badge.

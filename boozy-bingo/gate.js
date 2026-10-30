@@ -7,15 +7,14 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const box = $('#gateBox');
 const cfg = window.BOOZY_FIREBASE || {};
-const ADMIN = String(window.BOOZY_ADMIN_EMAIL || '').trim().toLowerCase();
 
 const GOOGLE_ICON = '<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 
-const configured = cfg.apiKey && !cfg.apiKey.startsWith('PASTE') && ADMIN && !ADMIN.startsWith('your_email');
+const configured = cfg.apiKey && !cfg.apiKey.startsWith('PASTE');
 
 if (!configured) {
   box.innerHTML = `<div class="big">🔧</div><h2>Setup needed</h2>
-    <p class="hint">The login gate isn't configured yet. Fill in <code>firebase-config.js</code> and publish <code>firestore.rules</code>. Step-by-step instructions are in <code>SETUP.md</code>.</p>`;
+    <p class="hint">The login gate isn't configured yet. Fill in <code>firebase-config.js</code>. Step-by-step instructions are in <code>SETUP.md</code>.</p>`;
 } else {
   run().catch(e => {
     box.innerHTML = `<div class="big">📡</div><h2>Couldn't reach Google</h2>
@@ -27,7 +26,7 @@ async function run() {
   const [{ initializeApp }, {
     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged
   }, {
-    getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp
+    getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp, getDocs, query, limit
   }] = await Promise.all(['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(f => import(FIREBASE + f)));
 
   const app = initializeApp(cfg);
@@ -174,14 +173,19 @@ async function run() {
     clearTimeout(showToast._t); showToast._t = setTimeout(() => t.classList.remove('show'), 4000);
   }
 
-  onAuthStateChanged(auth, user => {
+  let authSeq = 0;
+  onAuthStateChanged(auth, async user => {
+    const seq = ++authSeq;
     stopListening();
     // Signing out (or losing access) while the app is open: reload so no app state lingers on screen.
     if (started) { location.reload(); return; }
     if (!user) { showSignIn(); return; }
-    const isAdmin = (user.email || '').toLowerCase() === ADMIN && user.emailVerified;
-    if (isAdmin) { openApp(user, true); return; }
+    // The owner's email lives only in the Firestore rules (not in this public code): only the owner
+    // is allowed to list access requests, so a successful read means "this is the owner".
     gate('<p class="hint">Checking the guest list…</p>');
+    const isAdmin = await getDocs(query(collection(db, 'requests'), limit(1))).then(() => true, () => false);
+    if (seq !== authSeq) return; // signed out or switched account while checking
+    if (isAdmin) { openApp(user, true); return; }
     let requestShown = false;
     unsubs.push(onSnapshot(doc(db, 'allowed', user.uid), snap => {
       if (snap.exists()) openApp(user, false);

@@ -5,13 +5,10 @@
 window.BOOZY_LOGIN_ENABLED = true;
 
 // These values are safe to publish: access is enforced by the Firestore rules, not by keeping them secret.
+// Who the owner is lives only in the Firestore rules in the Firebase console, never in this public file.
 window.BOOZY_FIREBASE = {
-  apiKey: 'PASTE_API_KEY',
-  authDomain: 'PASTE_PROJECT_ID.firebaseapp.com',
-  projectId: 'PASTE_PROJECT_ID',
-  appId: 'PASTE_APP_ID'
+  apiKey: 'AIzaSyA8XuZZIpLP11wZb86HfBYdJ3nyArCanB0',
+  authDomain: 'boozy-bingo-5f57b.firebaseapp.com',
+  projectId: 'boozy-bingo-5f57b',
+  appId: '1:234611791736:web:45007f7dc3b52d8a8a5a8d'
 };
-
-// The Google account that owns the app and approves access requests.
-// Must match the email in firestore.rules.
-window.BOOZY_ADMIN_EMAIL = 'YOUR_EMAIL@gmail.com';
