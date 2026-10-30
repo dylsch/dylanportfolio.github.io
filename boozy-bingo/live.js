@@ -236,7 +236,7 @@ window.startBoozyLive = ctx => {
         <p class="hint">Start a live game and show the QR code. Friends scan it, type their name and play on their phones. No app or login needed.</p>
         <ul class="hint">
           <li><b>Bingo:</b> everyone gets their own card on their phone. Tick songs off in the <b>Host the game</b> tab, and a tap on BINGO is checked automatically.</li>
-          <li><b>Quiz:</b> run the Halloween quiz as normal. Questions appear on every phone with A–D buttons, and scores are counted for you.</li>
+          <li><b>Quiz:</b> run the Halloween or Christmas quiz as normal. Questions appear on every phone with A–D buttons, and scores are counted for you.</li>
         </ul>
         ${st.songs.length < need ? `<p class="pill warn">Only ${st.songs.length} songs saved, so phones get the quiz only. Add at least ${need} songs to include bingo cards.</p>` : `<p class="hint">Phones get ${st.grid}×${st.grid} cards from your ${st.songs.length} songs. The song list is locked in when the game starts.</p>`}
         <div class="row mt"><button class="btn primary" id="lvStart">Start live game</button></div>

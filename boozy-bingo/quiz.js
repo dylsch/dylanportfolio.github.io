@@ -1,17 +1,19 @@
-// Boozy Bingo: Halloween quiz. Host it on a TV/laptop, players answer on printed sheets or out loud.
+// Boozy Bingo: themed quizzes (Halloween, Christmas). Host on a TV/laptop; players answer on phones, paper or out loud.
 window.startBoozyQuiz = () => {
   'use strict';
 
-  const KEY = 'boozyBingo.quiz';
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(Q)); } catch {} };
+  const load = () => { try { return JSON.parse(localStorage.getItem(T.key)) || {}; } catch { return {}; } };
+  const save = () => { try { localStorage.setItem(T.key, JSON.stringify(Q)); } catch {} };
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const LETTERS = 'ABCD';
 
   // [question, correct answer, wrong 1, wrong 2, wrong 3, fun fact]
-  const BANK = [
+  const toQ = ([q, a, w1, w2, w3, fact]) => ({ q, a, wrong: [w1, w2, w3], fact });
+
+  // [question, correct answer, wrong 1, wrong 2, wrong 3, fun fact]
+  const HALLOWEEN = [
     ['Halloween grew out of which ancient Celtic festival?', 'Samhain', 'Beltane', 'Imbolc', 'Lughnasadh', 'Samhain marked the end of the harvest, when the boundary with the spirit world was said to be thinnest.'],
     ['What is "Halloween" short for?', "All Hallows' Eve", 'Hallowed Evening Feast', 'Hollow Moon Night', "All Hearts' Eve", "It's the evening before All Hallows' (All Saints') Day on 1 November."],
     ['Before pumpkins, what were jack-o\'-lanterns carved from in Ireland and Scotland?', 'Turnips', 'Potatoes', 'Apples', 'Onions', 'Irish immigrants in America switched to pumpkins because they were bigger and easier to carve.'],
@@ -50,9 +52,61 @@ window.startBoozyQuiz = () => {
     ['In which year was "The Exorcist" released?', '1973', '1968', '1980', '1977', 'It was the first horror film nominated for the Best Picture Oscar.'],
     ['Which game involves catching floating apples with only your teeth?', 'Bobbing for apples', 'Apple ducking roulette', 'Snap apple', 'Toffee dunk', 'In Scotland it\'s called "dooking".'],
     ['What is Wednesday Addams\'s brother called?', 'Pugsley', 'Fester', 'Lurch', 'Cousin Itt', 'In the original 1930s cartoons, the family had no names at all.']
-  ].map(([q, a, w1, w2, w3, fact]) => ({ q, a, wrong: [w1, w2, w3], fact }));
+  ].map(toQ);
 
-  const Q = Object.assign({ count: 15, timer: 20, autoReveal: true, players: 'Team Pumpkin\nTeam Ghoul', custom: '', round: null }, load());
+  const CHRISTMAS = [
+    ['In which country did the tradition of decorating a Christmas tree begin?', 'Germany', 'England', 'Norway', 'USA', 'Queen Victoria\'s German husband, Prince Albert, made it fashionable in Britain in the 1840s.'],
+    ['What is German "Glühwein"?', 'Mulled wine', 'Gingerbread', 'Spiced beer', 'Eggnog', 'It\'s the classic drink of German Christmas markets, often served in a souvenir mug.'],
+    ['How many reindeer pull Santa\'s sleigh in the poem "A Visit from St. Nicholas", before Rudolph joined?', '8', '6', '9', '12', 'Rudolph was created in 1939 for a department-store colouring book.'],
+    ['What is the name of the Grinch\'s dog?', 'Max', 'Rex', 'Buddy', 'Cindy-Lou', 'In the book, the Grinch ties a single antler to Max\'s head.'],
+    ['In "Home Alone", where is the McCallister family flying to when they leave Kevin behind?', 'Paris', 'London', 'Rome', 'Miami', 'In "Home Alone 2", Kevin ends up alone in New York instead.'],
+    ['In "Elf", which of these is one of the four main elf food groups?', 'Syrup', 'Gingerbread', 'Hot chocolate', 'Marshmallows', 'The four groups: candy, candy canes, candy corns and syrup.'],
+    ['Who sang "All I Want for Christmas Is You" (1994)?', 'Mariah Carey', 'Whitney Houston', 'Céline Dion', 'Kylie Minogue', 'It returns to the charts almost every December.'],
+    ['Which band released "Last Christmas" in 1984?', 'Wham!', 'Duran Duran', 'Spandau Ballet', 'Culture Club', 'It sat at number 2 in the UK behind Band Aid\'s "Do They Know It\'s Christmas?".'],
+    ['Which country sends London a giant Christmas tree for Trafalgar Square every year?', 'Norway', 'Sweden', 'Finland', 'Canada', 'Oslo has sent one every year since 1947 as thanks for Britain\'s support in World War II.'],
+    ['What was traditionally hidden in a Christmas pudding for luck?', 'A silver coin', 'A ring', 'An almond', 'A bean', 'Everyone in the family was meant to stir the pudding and make a wish.'],
+    ['In "Die Hard", what is the name of the skyscraper?', 'Nakatomi Plaza', 'Gennero Tower', 'McClane Center', 'Takagi Building', 'Is "Die Hard" a Christmas film? That debate counts as a party game too.'],
+    ['What is Scrooge\'s first name in "A Christmas Carol"?', 'Ebenezer', 'Jacob', 'Bob', 'Edmund', 'Dickens wrote the story in about six weeks in 1843.'],
+    ['Counting Jacob Marley, how many ghosts visit Scrooge?', '4', '3', '5', '2', 'Marley comes first, then the Ghosts of Christmas Past, Present and Yet to Come.'],
+    ['In "The Twelve Days of Christmas", what is given on the fifth day?', 'Five gold rings', 'Five calling birds', 'Five geese a-laying', 'Five French hens', 'Add up every gift in the song and you get 364: one for each day of the year, almost.'],
+    ['Under which plant are people supposed to kiss at Christmas?', 'Mistletoe', 'Holly', 'Ivy', 'Poinsettia', 'Mistletoe is a semi-parasite: it grows on trees and steals some of their water and nutrients.'],
+    ['The poinsettia, the Christmas pot plant, is native to which country?', 'Mexico', 'Brazil', 'Spain', 'India', 'Its red "petals" are actually leaves called bracts. The real flowers are the tiny yellow buds in the middle.'],
+    ['Which saint is Santa Claus based on?', 'Saint Nicholas', 'Saint George', 'Saint Christopher', 'Saint Paul', 'Nicholas was a 4th-century bishop of Myra, in what is now Turkey.'],
+    ['In which country is Santa called "Père Noël"?', 'France', 'Italy', 'Spain', 'Portugal', 'In Italy he\'s Babbo Natale, and in Malta he\'s Missier il-Milied.'],
+    ['Which hot chestnut-and-cocoa drink is a Maltese Christmas tradition?', 'Imbuljuta', 'Kannoli', 'Qagħaq tal-għasel', 'Kinnie', 'It\'s traditionally served after midnight Mass on Christmas Eve.'],
+    ['In Malta, what is a "presepju"?', 'A nativity crib', 'A Christmas tree', 'A carol service', 'A Christmas cake', 'Some Maltese villages build huge cribs with moving figures and running water.'],
+    ['What is "ġulbiena", grown in Maltese homes before Christmas?', 'Pale sprouted grain used to decorate the crib', 'A red winter flower', 'A honey-filled pastry', 'A type of fir tree', 'The seeds are grown in the dark so the shoots stay white and thread-like.'],
+    ['Which real Christmas tree is famous for holding on to its needles?', 'Nordmann fir', 'Norway spruce', 'Scots pine', 'Blue spruce', 'The Norway spruce is the traditional tree, but it drops needles quickly in a warm room.'],
+    ['Which holly plants produce the red berries?', 'Female plants', 'Male plants', 'Plants over 10 years old', 'Plants grown in shade', 'Holly berries are toxic to people and pets, so keep them out of reach.'],
+    ['In "Love Actually", which song does Billy Mack turn into a Christmas single?', '"Love Is All Around"', '"Wonderful Christmastime"', '"White Christmas"', '"Jingle Bell Rock"', 'His version is called "Christmas Is All Around".'],
+    ['In "It\'s a Wonderful Life", what is the name of the angel trying to earn his wings?', 'Clarence', 'Gabriel', 'George', 'Harry', '"Every time a bell rings, an angel gets his wings."'],
+    ['Who sings "Fairytale of New York" with The Pogues?', 'Kirsty MacColl', 'Sinéad O\'Connor', 'Dolores O\'Riordan', 'Kate Bush', 'It was released in 1987 and still gets played every Christmas.'],
+    ['Which ballet is traditionally performed at Christmas?', 'The Nutcracker', 'Swan Lake', 'Giselle', 'Coppélia', 'Tchaikovsky wrote the music, and it premiered in St Petersburg in 1892.'],
+    ['On which date is Boxing Day?', '26 December', '24 December', '27 December', '1 January', 'It\'s traditionally when servants and tradespeople received gift "boxes".'],
+    ['Which spirit is the classic base of a Hot Toddy?', 'Whisky', 'Vodka', 'Gin', 'Tequila', 'Mixed with hot water, honey and lemon, it\'s many people\'s favourite "cold remedy".'],
+    ['Baileys Irish Cream is made from Irish whiskey and…', 'Cream', 'Coffee', 'Chocolate liqueur', 'Condensed milk', 'Baileys was launched in 1974.'],
+    ['What brings Frosty the Snowman to life?', 'An old silk hat', 'A carrot nose', 'A magic scarf', 'A kiss', '"There must have been some magic in that old silk hat they found."'],
+    ['In "The Polar Express", what first gift of Christmas does the boy choose?', 'A sleigh bell', 'A snow globe', 'A golden ticket', 'A toy train', 'Only those who truly believe can hear the bell ring.'],
+    ['Christmas Island in the Indian Ocean belongs to which country?', 'Australia', 'UK', 'Indonesia', 'New Zealand', 'It\'s famous for the migration of millions of red crabs.'],
+    ['Christmas crackers were invented in which country?', 'UK', 'USA', 'France', 'Germany', 'London sweet-maker Tom Smith came up with them in the 1840s.'],
+    ['Which fairy tale made gingerbread houses popular?', 'Hansel and Gretel', 'Little Red Riding Hood', 'Snow White', 'The Gingerbread Man', 'The Brothers Grimm published it in Germany in 1812.'],
+    ['In Icelandic tradition, how many Yule Lads visit children before Christmas?', '13', '7', '10', '24', 'One of them, Spoon-Licker, steals spoons to lick.'],
+    ['Which Finnish town calls itself the official hometown of Santa Claus?', 'Rovaniemi', 'Helsinki', 'Turku', 'Oulu', 'It sits right on the Arctic Circle in Lapland.'],
+    ['"Silent Night" was originally written in which language?', 'German', 'English', 'Latin', 'French', '"Stille Nacht" was first performed in Austria in 1818.'],
+    ['Which actor plays Santa in "The Santa Clause" (1994)?', 'Tim Allen', 'Steve Martin', 'Robin Williams', 'Billy Crystal', 'His character becomes Santa after accidentally causing the old one to fall off his roof.']
+  ].map(toQ);
+
+  const THEMES = {
+    halloween: { key: 'boozyBingo.quiz', title: '🎃 Halloween quiz', emoji: '🎃', teams: 'Team Pumpkin\nTeam Ghoul', ink: '#d35400',
+      blurb: 'films, folklore, spooky plants and cocktails', bank: HALLOWEEN },
+    christmas: { key: 'boozyBingo.quiz.christmas', title: '🎄 Christmas quiz', emoji: '🎄', teams: 'Team Rudolph\nTeam Elf', ink: '#c0392b',
+      blurb: 'films, songs, Maltese traditions, festive plants and drinks', bank: CHRISTMAS }
+  };
+  let T = THEMES.halloween;
+  const BANK = () => T.bank;
+
+  const fresh = () => Object.assign({ count: 15, timer: 20, autoReveal: true, players: T.teams, custom: '', round: null }, load());
+  let Q = fresh();
 
   const host = $('#tab-quiz');
   // Phone players (live.js) take over team scoring when anyone has joined by QR code.
@@ -71,7 +125,7 @@ window.startBoozyQuiz = () => {
   }
 
   function newRound() {
-    const pool = [...customQuestions(), ...shuffle(BANK)];
+    const pool = [...customQuestions(), ...shuffle(BANK())];
     const picked = shuffle(pool.slice(0, Math.max(customQuestions().length, Math.min(Q.count, pool.length))));
     Q.round = {
       id: Date.now().toString(36), i: 0, revealed: false, done: false, started: false, players: players(), right: {},
@@ -83,10 +137,10 @@ window.startBoozyQuiz = () => {
   // ---------- Setup screen ----------
   function renderSetup() {
     stopTimer();
-    const r = Q.round, total = BANK.length + customQuestions().length;
+    const r = Q.round, total = BANK().length + customQuestions().length;
     host.innerHTML = `<div class="grid2">
       <div class="card">
-        <h2>🎃 Halloween quiz</h2>
+        <h2>${T.title}</h2>
         <p class="hint">Put this on a TV or laptop everyone can see. Players write their answers on printed sheets, or shout them out. Reveal the answer, give points, and anyone who got it wrong takes a sip.</p>
         <div class="fields">
           <div><label for="qzCount">Questions</label><input type="number" id="qzCount" min="1" max="${total}" value="${Q.count}"></div>
@@ -108,7 +162,7 @@ window.startBoozyQuiz = () => {
       </div>
       <div class="card">
         <h2>Question bank</h2>
-        <p class="hint">${BANK.length} built-in Halloween questions covering films, folklore, spooky plants and cocktails, plus any of your own. Each quiz picks a random set.</p>
+        <p class="hint">${BANK().length} built-in questions covering ${T.blurb}, plus any of your own. Each quiz picks a random set.</p>
         <label for="qzCustom">Your own questions (optional, always included)</label>
         <textarea class="short" id="qzCustom" placeholder="Question | Right answer | Wrong 1 | Wrong 2 | Wrong 3&#10;Who is the scariest person here? | The host | Nobody | The DJ | Your ex">${esc(Q.custom)}</textarea>
         <p class="hint">One per line: question, then the right answer, then up to three wrong ones, separated by <code>|</code>.</p>
@@ -127,7 +181,7 @@ window.startBoozyQuiz = () => {
     $('#qzNew').onclick = () => {
       read();
       if (Q.round && Q.round.started && !Q.round.done && !confirm('Throw away the quiz in progress and start a new one?')) return;
-      newRound(); renderSetup(); toast(`🎃 ${Q.round.qs.length} questions ready`);
+      newRound(); renderSetup(); toast(`${T.emoji} ${Q.round.qs.length} questions ready`);
     };
     if (r) {
       $('#qzResume').onclick = () => {
@@ -261,7 +315,7 @@ window.startBoozyQuiz = () => {
   }
   function printSheets() {
     const r = Q.round, names = players();
-    const sheet = name => `<div class="qsheet"><h1>🎃 Halloween quiz</h1>
+    const sheet = name => `<div class="qsheet" style="--ink:${T.ink}"><h1>${T.title}</h1>
       <p class="qname">Name / team: <span>${esc(name || '')}</span></p>
       <ol>${r.qs.map(() => `<li>${[...LETTERS].map(l => `<i>${l}</i>`).join('')}</li>`).join('')}</ol>
       <p class="qfoot">Circle one letter per question · Wrong answer = sip 🍺 · Please drink responsibly</p></div>`;
@@ -269,7 +323,7 @@ window.startBoozyQuiz = () => {
   }
   function printKey() {
     const r = Q.round;
-    doPrint(`<div class="qsheet key"><h1>🎃 Halloween quiz: answer key</h1>
+    doPrint(`<div class="qsheet key" style="--ink:${T.ink}"><h1>${T.title}: answer key</h1>
       <ol>${r.qs.map(x => `<li><b>${esc(x.q)}</b><br>${LETTERS[x.a]}: ${esc(x.opts[x.a])}</li>`).join('')}</ol></div>`);
   }
 
@@ -280,9 +334,19 @@ window.startBoozyQuiz = () => {
     if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
   });
 
-  window.boozyQuiz = { teams: players };
-
-  if (Q.round && Q.round.started && Q.round.done) renderResults();
-  else if (Q.round && Q.round.started) renderStage();
-  else renderSetup();
+  function show() {
+    if (Q.round && Q.round.started && Q.round.done) renderResults();
+    else if (Q.round && Q.round.started) renderStage();
+    else renderSetup();
+  }
+  // Switch between quiz themes; each keeps its own settings, teams and progress.
+  function setTheme(name) {
+    if (!THEMES[name] || THEMES[name] === T) return;
+    if (document.fullscreenElement) document.exitFullscreen();
+    stopTimer();
+    T = THEMES[name]; Q = fresh();
+    show();
+  }
+  window.boozyQuiz = { teams: players, setTheme };
+  show();
 };

@@ -47,10 +47,10 @@ header.top {
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #6c5a78; display: inline-block; }
 .dot.on { background: var(--green); }
 
-.modes { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px; margin: 4px 0 14px; max-width: 100%; }
+.modes { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px; margin: 4px 0 14px; max-width: 100%; }
 .modes button { background: none; border: 0; color: var(--muted); font: 600 16px Fredoka, sans-serif; padding: 9px 18px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
 .modes button.active { background: var(--accent); color: var(--accent-ink); }
-@media (max-width: 420px) { .modes { display: grid; } .modes button { padding: 9px 8px; font-size: 15px; } }
+@media (max-width: 560px) { .modes { display: grid; grid-template-columns: 1fr 1fr 1fr; } .modes button { padding: 9px 4px; font-size: 13px; white-space: normal; } }
 nav.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
 nav.tabs button {
   background: none; border: 0; color: var(--muted); font: 600 15px Fredoka, sans-serif;
@@ -162,7 +162,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 #printArea { display: none; }
 [hidden] { display: none !important; }
 
-/* Halloween quiz */
+/* Quizzes (Halloween, Christmas) */
 #tab-quiz:fullscreen { background: var(--bg); padding: 24px; overflow: auto; }
 .qstage { background: radial-gradient(circle at 50% 0, #3b2150, var(--panel) 70%); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; min-height: 70vh; display: flex; flex-direction: column; gap: 18px; }
 #tab-quiz:fullscreen .qstage { min-height: calc(100vh - 48px); }
@@ -256,12 +256,12 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   .caller li::marker { color: #6a1b9a; }
   .qsheet { break-after: page; page-break-after: always; font-family: Inter, sans-serif; color: #1a1020; }
   .qsheet:last-child { break-after: auto; page-break-after: auto; }
-  .qsheet h1 { font: 700 24pt Fredoka, sans-serif; color: #d35400; margin-bottom: 3mm; }
+  .qsheet h1 { font: 700 24pt Fredoka, sans-serif; color: var(--ink, #d35400); margin-bottom: 3mm; }
   .qsheet .qname { font-size: 13pt; border-bottom: 1.5px solid #999; padding-bottom: 2mm; margin-bottom: 5mm; }
   .qsheet .qname span { font-weight: 700; }
   .qsheet ol { columns: 2; column-gap: 14mm; font-size: 13pt; padding-left: 9mm; margin: 0; }
   .qsheet li { break-inside: avoid; margin-bottom: 3.2mm; }
-  .qsheet li i { font-style: normal; display: inline-block; width: 8mm; height: 8mm; line-height: 7.5mm; text-align: center; border: 1.5px solid #d35400; border-radius: 50%; margin-right: 3mm; font-size: 10pt; color: #d35400; }
+  .qsheet li i { font-style: normal; display: inline-block; width: 8mm; height: 8mm; line-height: 7.5mm; text-align: center; border: 1.5px solid var(--ink, #d35400); border-radius: 50%; margin-right: 3mm; font-size: 10pt; color: var(--ink, #d35400); }
   .qsheet.key ol { columns: 1; font-size: 10.5pt; }
   .qsheet.key li { margin-bottom: 2.5mm; }
   .qsheet .qfoot { font-size: 9pt; color: #777; margin-top: 6mm; text-align: center; }
@@ -285,7 +285,8 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 
   <div class="modes" id="modes" role="tablist" aria-label="Game">
     <button data-mode="bingo" class="active">🎵 Boozy Bingo</button>
-    <button data-mode="quiz">🎃 Halloween Quiz</button>
+    <button data-mode="halloween">🎃 Halloween Quiz</button>
+    <button data-mode="christmas">🎄 Christmas Quiz</button>
   </div>
 
   <!-- data-group says which game's menu a tab belongs to; the phones and access tabs appear in both. -->
@@ -295,9 +296,9 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="spotify" data-group="bingo"><span class="n">3</span>Spotify playlist</button>
     <button data-tab="host" data-group="bingo"><span class="n">4</span>Host the game</button>
     <button data-tab="live" data-group="bingo"><span class="n">5</span>📱 Play on phones</button>
-    <button data-tab="live" data-group="quiz" hidden><span class="n">1</span>📱 Let players join</button>
-    <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🎃 Run the quiz</button>
-    <button data-tab="access" data-group="bingo quiz" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
+    <button data-tab="live" data-group="halloween christmas" hidden><span class="n">1</span>📱 Let players join</button>
+    <button data-tab="quiz" data-group="halloween christmas" hidden><span class="n">2</span>Run the quiz</button>
+    <button data-tab="access" data-group="bingo halloween christmas" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -690,12 +691,14 @@ Kanye West - Gold Digger`
   // Two menus (bingo and quiz), each remembering its own last tab.
   const inGroup = (b, mode) => b.dataset.group.split(' ').includes(mode);
   let mode = store.get('boozyBingo.mode', 'bingo');
+  if (!['bingo', 'halloween', 'christmas'].includes(mode)) mode = 'bingo';
   function showMode(m) {
     mode = m;
     $$('#modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
     // The access tab is admin-only: gate.js unhides it, so keep it out of this toggle.
     $$('#tabs button:not(#accessTabBtn)').forEach(b => { b.hidden = !inGroup(b, m); });
     store.set('boozyBingo.mode', m);
+    if (m !== 'bingo') window.boozyQuiz.setTheme(m);
   }
   function showTab(name) {
     const btns = $$('#tabs button').filter(b => b.dataset.tab === name);
@@ -710,7 +713,7 @@ Kanye West - Gold Digger`
   $('#modes').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     showMode(b.dataset.mode);
-    showTab(store.get('boozyBingo.tab.' + b.dataset.mode, b.dataset.mode === 'quiz' ? 'quiz' : 'songs'));
+    showTab(store.get('boozyBingo.tab.' + b.dataset.mode, b.dataset.mode === 'bingo' ? 'songs' : 'quiz'));
   });
 
   // ---------- Songs tab ----------
@@ -1143,7 +1146,7 @@ Kanye West - Gold Digger`
     $('#plName').placeholder = `${state.title} · ${state.code}`;
     if (state.playlistUrl) { const a = $('#plLink'); a.href = state.playlistUrl; a.style.display = ''; }
     showMode(mode);
-    showTab(store.get('boozyBingo.tab.' + mode, mode === 'quiz' ? 'quiz' : 'songs'));
+    showTab(store.get('boozyBingo.tab.' + mode, mode === 'bingo' ? 'songs' : 'quiz'));
     renderSpotify();
   })();
 };
