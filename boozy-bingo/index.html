@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Boozy Bingo</title>
 <meta name="description" content="Music bingo for parties: build a song list, generate printable bingo cards and create the Spotify playlist in one go.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -142,9 +143,10 @@ button.btn:disabled { opacity: .5; cursor: not-allowed; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(150%);
   background: var(--accent); color: var(--accent-ink); font: 600 15px Inter, sans-serif; padding: 12px 18px; border-radius: 12px;
-  transition: transform .25s; max-width: calc(100vw - 32px); z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  transition: transform .25s, opacity .25s; max-width: calc(100vw - 32px); z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  opacity: 0; pointer-events: none;
 }
-.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 .verdict { font: 700 22px Fredoka, sans-serif; margin: 10px 0; }
 .verdict.win { color: var(--green); }
 .verdict.no { color: var(--danger); }
@@ -154,6 +156,27 @@ ol.steps li { margin-bottom: 6px; }
 code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; word-break: break-all; }
 
 #printArea { display: none; }
+[hidden] { display: none !important; }
+
+/* Access gate */
+.gatebox { max-width: 460px; margin: 8vh auto 0; text-align: center; }
+.gatebox .big { font-size: 46px; margin-bottom: 6px; }
+.gatebox textarea { min-height: 90px; font-family: inherit; font-size: 14px; text-align: left; }
+.gatebox .row { justify-content: center; }
+.gbtn { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; border-radius: 99px; padding: 10px 18px; font: 600 15px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; }
+.gbtn svg { width: 18px; height: 18px; }
+.userchip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.userchip img { width: 28px; height: 28px; border-radius: 50%; }
+.userchip button { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 4px 9px; cursor: pointer; font: 500 12px Inter, sans-serif; }
+.head-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.req { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.req:last-child { border-bottom: 0; }
+.req img, .req .av { width: 38px; height: 38px; border-radius: 50%; background: var(--panel-2); flex: none; }
+.req .who { flex: 1; min-width: 0; }
+.req .who .e { color: var(--muted); font-size: 13px; word-break: break-all; }
+.req .msg { margin-top: 4px; font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; }
+.req .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { display: inline-block; background: var(--pink); color: #fff; border-radius: 99px; font-size: 11px; padding: 0 7px; margin-left: 6px; }
 
 @media print {
   @page { size: A4 portrait; margin: 8mm; }
@@ -188,10 +211,18 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="gate">
+  <header class="top"><div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div></header>
+  <div class="card gatebox" id="gateBox"><p class="hint">Loading…</p></div>
+</div>
+
+<div class="wrap" id="app" hidden>
   <header class="top">
     <div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div>
-    <div class="spotify-status"><span class="dot" id="spDot"></span><span id="spStatusText">Spotify not connected</span></div>
+    <div class="head-right">
+      <div class="spotify-status"><span class="dot" id="spDot"></span><span id="spStatusText">Spotify not connected</span></div>
+      <div class="userchip" id="userChip"></div>
+    </div>
   </header>
 
   <nav class="tabs" id="tabs">
@@ -199,6 +230,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="cards"><span class="n">2</span>Bingo cards</button>
     <button data-tab="spotify"><span class="n">3</span>Spotify playlist</button>
     <button data-tab="host"><span class="n">4</span>Host the game</button>
+    <button data-tab="access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -347,6 +379,28 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     </div>
   </section>
 
+  <!-- ACCESS (admin only) -->
+  <section class="tab" id="tab-access">
+    <div class="grid2">
+      <div class="card">
+        <h2>Access requests</h2>
+        <p class="hint">People who signed in with Google and asked to use Boozy Bingo.</p>
+        <div id="reqList"><p class="hint">No pending requests.</p></div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Allowed people</h2>
+          <p class="hint">You always have access. Anyone listed here can use the app too.</p>
+          <div id="allowedList"><p class="hint">Nobody else yet.</p></div>
+        </div>
+        <div class="card">
+          <h2>Declined</h2>
+          <div id="deniedList"><p class="hint">None.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <p class="hint" style="text-align:center;margin-top:40px">🍻 Please drink responsibly. Water and soft drinks count as drinks too.</p>
 </div>
 
@@ -354,7 +408,8 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <div class="toast" id="toast"></div>
 
 <script>
-(() => {
+// The app only starts once the access gate (module script below) confirms the signed-in user is allowed.
+window.startBoozyApp = () => {
   'use strict';
 
   // ---------- Storage ----------
@@ -986,7 +1041,9 @@ Kanye West - Gold Digger`
     showTab(store.get('boozyBingo.tab', 'songs'));
     renderSpotify();
   })();
-})();
+};
 </script>
+<script src="firebase-config.js"></script>
+<script type="module" src="gate.js"></script>
 </body>
 </html>
