@@ -66,6 +66,7 @@ window.startBoozyLive = ctx => {
         players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         players.forEach(checkBingo);
         render(); renderQuizInfo(); renderTeams(); checkAllAnswered();
+        window.dispatchEvent(new Event('boozy:players'));
       })
     ];
   }
@@ -225,7 +226,12 @@ window.startBoozyLive = ctx => {
     if (cl) cl.onclick = () => Promise.all(players.map(p => setTeam(p.id, '')));
   }
   window.addEventListener('boozy:quiz-setup', () => { renderTeams(); if (game) update({ teams: teamNames() }); });
-  window.boozyLive = { playerCount: () => (game ? players.length : 0) };
+  window.boozyLive = {
+    playerCount: () => (game ? players.length : 0),
+    active: () => !!game,
+    players: () => (game ? players : []),
+    update
+  };
 
   // ---------- UI ----------
   function render() {
@@ -266,10 +272,11 @@ window.startBoozyLive = ctx => {
       <div>
         <div class="card">
           <div class="row" style="justify-content:space-between"><h2 style="margin:0">Players</h2><span class="pill ${game.open ? 'ok' : 'warn'}">${players.length} joined${game.open ? '' : ' · closed'}</span></div>
-          <p class="hint">Phones are showing: <b>${{ lobby: 'waiting screen', bingo: 'bingo card', quiz: 'quiz' }[game.mode] || game.mode}</b></p>
+          <p class="hint">Phones are showing: <b>${{ lobby: 'waiting screen', bingo: 'bingo card', quiz: 'quiz', mlt: "who's most likely to" }[game.mode] || game.mode}</b></p>
           <div class="row">
             <button class="btn${game.mode === 'bingo' ? ' primary' : ''}" data-mode="bingo" ${game.bingo.songs.length ? '' : 'disabled'}>🎵 Bingo</button>
-            <button class="btn${game.mode === 'quiz' ? ' primary' : ''}" data-mode="quiz">🎃 Quiz</button>
+            <button class="btn${game.mode === 'quiz' ? ' primary' : ''}" data-mode="quiz">🧠 Quiz</button>
+            <button class="btn${game.mode === 'mlt' ? ' primary' : ''}" data-mode="mlt">🙋 Most likely to</button>
             <button class="btn${game.mode === 'lobby' ? ' primary' : ''}" data-mode="lobby">⏸ Waiting screen</button>
           </div>
           <div class="lvplayers">${players.length ? players.map(p => {

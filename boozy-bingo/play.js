@@ -69,6 +69,7 @@ async function main() {
     joining = false;
     $('#me').innerHTML = `${esc(me.name)}<br>${me.team ? `<span class="team">${esc(me.team)}</span>` : esc(game.title || '')}`;
 
+    if (game.mode === 'mlt') { view.innerHTML = mltHtml(); bindMlt(); return; }
     const hasBingo = !!(me.card && game.bingo && game.bingo.songs && game.bingo.songs.length);
     if (!tab) tab = hasBingo ? 'bingo' : 'quiz';
     if (tab === 'bingo' && !hasBingo) tab = 'quiz';
@@ -138,6 +139,39 @@ async function main() {
       setTimeout(() => { bingoCooldown = false; render(); }, 8000);
       try { await fs.updateDoc(meRef, { bingoAt: fs.serverTimestamp() }); } catch (e) { alert(e.message); }
     };
+  }
+
+  // ---------- Who's most likely to ----------
+  function mltHtml() {
+    const m = game.mlt;
+    if (!m) return `<div class="card center"><div class="big">🙋</div><h2>Who's most likely to…</h2><p class="hint">Get ready! The first prompt is coming up.</p></div>`;
+    if (m.done) {
+      const h = m.hall || [];
+      return `<div class="card"><h2 class="center">🏆 Hall of fame</h2>${h.length ? `<ol class="board">${h.map((r, i) =>
+        `<li class="${r.name === me.name ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(r.name)}</span><b>${r.n}×</b></li>`).join('')}</ol>` : '<p class="hint center">Thanks for playing!</p>'}</div>`;
+    }
+    const mine = me.answers ? me.answers[m.key] : undefined;
+    const head = `<div class="qnum">Round ${m.i + 1} / ${m.total}</div><p class="mlwho">Who's most likely to…</p><h2 class="qq">${esc(m.prompt)}?</h2>`;
+    if (m.revealed) {
+      const res = m.results || [], top = res.length ? res[0].votes : 0;
+      const winners = res.filter(r => r.votes === top);
+      const meWin = winners.some(r => r.id === user.uid), myVotes = (res.find(r => r.id === user.uid) || {}).votes || 0;
+      return `<div class="card">${head}${res.length ? `<ol class="board">${res.map(r =>
+        `<li class="${r.id === user.uid ? 'mine' : ''}"><span>${r.votes === top ? '👑 ' : ''}${esc(r.name)}</span><b>${r.votes}</b></li>`).join('')}</ol>` : ''}
+        <p class="sip" style="color:var(--pink)">${!res.length ? 'Nobody voted. Everybody drinks! 🍻' : meWin ? '🍺 That\'s you! Drink up!' : `🍺 ${winners.map(r => esc(r.name)).join(' & ')} ${winners.length > 1 ? 'drink' : 'drinks'}!`}</p>
+        ${res.length && !meWin ? `<p class="hint center">You got ${myVotes} vote${myVotes === 1 ? '' : 's'}.</p>` : ''}</div>`;
+    }
+    if (!m.choices || !m.choices.length) return `<div class="card center">${head}<p class="sip">👉 On the count of three, point at someone!</p></div>`;
+    return `<div class="card">${head}<div class="opts">${m.choices.map((c, k) =>
+      `<button class="opt ${k === mine ? 'sel' : ''}" data-vote="${k}"><b>${esc((c.name || '?').charAt(0).toUpperCase())}</b><span>${esc(c.name)}${c.id === user.uid ? ' (you)' : ''}</span></button>`).join('')}</div>
+      <p class="hint center mt">${mine === undefined ? 'Tap a name to vote. Votes are anonymous.' : 'Vote in! You can change it until the votes are revealed.'}</p></div>`;
+  }
+  function bindMlt() {
+    view.querySelectorAll('[data-vote]').forEach(b => b.onclick = () => {
+      const m = game.mlt;
+      if (!m || m.revealed) return;
+      fs.updateDoc(meRef, { [`answers.${m.key}`]: Number(b.dataset.vote) }).catch(e => alert(e.message));
+    });
   }
 
   // ---------- Quiz ----------
