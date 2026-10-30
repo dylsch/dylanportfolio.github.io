@@ -47,10 +47,17 @@ header.top {
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #6c5a78; display: inline-block; }
 .dot.on { background: var(--green); }
 
-.modes { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px; margin: 4px 0 14px; max-width: 100%; }
-.modes button { background: none; border: 0; color: var(--muted); font: 600 16px Fredoka, sans-serif; padding: 9px 18px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
-.modes button.active { background: var(--accent); color: var(--accent-ink); }
-@media (max-width: 560px) { .modes { display: grid; grid-template-columns: 1fr 1fr 1fr; } .modes button { padding: 9px 4px; font-size: 13px; white-space: normal; } }
+.home h2 { font-size: clamp(22px, 3vw, 30px); margin: 6px 0 16px; }
+.gamegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.gametile { text-align: left; background: var(--panel); border: 2px solid var(--line); border-radius: 18px; color: var(--text); padding: 20px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; font: 14px/1.45 Inter, sans-serif; transition: transform .15s, border-color .15s; }
+.gametile:hover, .gametile:focus-visible { border-color: var(--accent); transform: translateY(-2px); }
+.gametile .ge { font-size: 44px; line-height: 1; }
+.gametile b { font: 600 20px Fredoka, sans-serif; }
+.gametile p { margin: 0; color: var(--muted); }
+.gametile .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; }
+body:not(.is-admin) .admin-only { display: none; }
+.gamebar { display: flex; align-items: center; gap: 14px; margin: 4px 0 8px; flex-wrap: wrap; }
+.gamebar h2 { margin: 0; font-size: 22px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 6px 12px; margin: 0; font-weight: 500; cursor: pointer; }
 .chip input { accent-color: var(--accent); }
 .chip small { color: var(--muted); }
@@ -301,10 +308,14 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     </div>
   </header>
 
-  <div class="modes" id="modes" role="tablist" aria-label="Game">
-    <button data-mode="bingo" class="active">🎵 Boozy Bingo</button>
-    <button data-mode="quiz">🧠 Quiz Night</button>
-    <button data-mode="mlt">🙋 Most Likely To</button>
+  <!-- Welcome screen: one tile per game, built from GAMES in the script below. -->
+  <div id="home" class="home" hidden>
+    <h2>What are we playing tonight? 🍹</h2>
+    <div class="gamegrid" id="gameGrid"></div>
+  </div>
+  <div class="gamebar" id="gameBar" hidden>
+    <button class="btn" id="homeBtn">← All games</button>
+    <h2 id="gameTitle"></h2>
   </div>
 
   <!-- data-group says which game's menu a tab belongs to; the phones and access tabs appear in both. -->
@@ -317,7 +328,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="live" data-group="quiz mlt" hidden><span class="n">1</span>📱 Let players join</button>
     <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🧠 Run the quiz</button>
     <button data-tab="mlt" data-group="mlt" hidden><span class="n">2</span>🙋 Play</button>
-    <button data-tab="access" data-group="bingo quiz mlt" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
+    <button data-tab="access" data-group="bingo quiz mlt access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -713,19 +724,40 @@ Kanye West - Gold Digger`
   const songsToText = songs => songs.map(s => s.artist ? `${s.artist} - ${s.title}` : s.title).join('\n');
 
   // ---------- Tabs ----------
-  // Two menus (bingo and quiz), each remembering its own last tab.
+  // ---------- Welcome screen ----------
+  // To add a game: give it a section and tab buttons with data-group="<id>", then add it here.
+  const GAMES = [
+    { id: 'bingo', emoji: '🎵', name: 'Boozy Bingo', tab: 'songs', tags: ['🖨️ Print', '🎧 Spotify', '📱 Phones'],
+      desc: 'Music bingo: build a song list, print the cards, make the Spotify playlist and play.' },
+    { id: 'quiz', emoji: '🧠', name: 'Quiz Night', tab: 'quiz', tags: ['📱 Phones', '👥 Teams', '🖨️ Print'],
+      desc: '14 quiz packs from Halloween to Malta, with teams and speed points on phones.' },
+    { id: 'mlt', emoji: '🙋', name: "Who's Most Likely To", tab: 'mlt', tags: ['📱 Phones', '👉 No phones needed'],
+      desc: 'Everyone votes for who fits the prompt best. Most votes drinks.' },
+    { id: 'access', emoji: '🔒', name: 'Access', tab: 'access', admin: true, tags: ['Only you see this'],
+      desc: 'Approve or remove the people who can use Boozy Bingo.' }
+  ];
+  $('#gameGrid').innerHTML = GAMES.map(g => `<button class="gametile${g.admin ? ' admin-only' : ''}" data-game="${g.id}">
+    <span class="ge">${g.emoji}</span><b>${esc(g.name)}</b><p>${esc(g.desc)}</p>
+    <span class="tags">${g.tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</span></button>`).join('');
+
   const inGroup = (b, mode) => b.dataset.group.split(' ').includes(mode);
-  let mode = store.get('boozyBingo.mode', 'bingo');
-  if (mode === 'halloween' || mode === 'christmas') { window.boozyQuiz.setTheme(mode); mode = 'quiz'; }
-  if (!['bingo', 'quiz', 'mlt'].includes(mode)) mode = 'bingo';
-  const firstTab = m => ({ bingo: 'songs', quiz: 'quiz', mlt: 'mlt' }[m]);
+  const gameOf = id => GAMES.find(g => g.id === id);
+  // Open on the welcome screen, but a reload (or coming back from Spotify login) returns to the game you were in.
+  let mode = (() => { try { return sessionStorage.getItem('boozyBingo.game'); } catch { return null; } })();
+  if (!gameOf(mode)) mode = 'home';
   function showMode(m) {
     mode = m;
-    $$('#modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    const home = m === 'home';
+    $('#home').hidden = !home; $('#gameBar').hidden = home; $('#tabs').hidden = home;
+    if (home) $$('section.tab').forEach(s => s.classList.remove('active'));
+    else $('#gameTitle').textContent = `${gameOf(m).emoji} ${gameOf(m).name}`;
     // The access tab is admin-only: gate.js unhides it, so keep it out of this toggle.
     $$('#tabs button:not(#accessTabBtn)').forEach(b => { b.hidden = !inGroup(b, m); });
-    store.set('boozyBingo.mode', m);
+    try { sessionStorage.setItem('boozyBingo.game', m); } catch {}
   }
+  const openGame = id => { showMode(id); showTab(store.get('boozyBingo.tab.' + id, gameOf(id).tab)); };
+  $('#gameGrid').addEventListener('click', e => { const t = e.target.closest('[data-game]'); if (t) openGame(t.dataset.game); });
+  $('#homeBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); showMode('home'); };
   function showTab(name) {
     const btns = $$('#tabs button').filter(b => b.dataset.tab === name);
     if (btns.length && !btns.some(b => inGroup(b, mode))) showMode(btns[0].dataset.group.split(' ')[0]);
@@ -736,11 +768,6 @@ Kanye West - Gold Digger`
     store.set('boozyBingo.tab.' + mode, name);
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
-  $('#modes').addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    showMode(b.dataset.mode);
-    showTab(store.get('boozyBingo.tab.' + b.dataset.mode, firstTab(b.dataset.mode)));
-  });
 
   // ---------- Songs tab ----------
   function cellsNeeded() { const n = state.grid * state.grid; return n - (state.free && state.grid % 2 ? 1 : 0); }
@@ -934,7 +961,8 @@ Kanye West - Gold Digger`
     if (!pk || pk.state !== q.get('state')) { toast('Spotify login failed (state mismatch). Please try again.'); return; }
     try {
       await tokenRequest({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: SP.redirect, client_id: SP.clientId, code_verifier: pk.verifier });
-      store.set('boozyBingo.tab', pk.tab || 'spotify');
+      store.set('boozyBingo.tab.bingo', pk.tab || 'spotify');
+      try { sessionStorage.setItem('boozyBingo.game', 'bingo'); } catch {}
     } catch (e) { toast('Spotify login failed: ' + e.message, 6000); }
   }
 
@@ -1171,8 +1199,7 @@ Kanye West - Gold Digger`
     $('#plName').value = state.playlistName || '';
     $('#plName').placeholder = `${state.title} · ${state.code}`;
     if (state.playlistUrl) { const a = $('#plLink'); a.href = state.playlistUrl; a.style.display = ''; }
-    showMode(mode);
-    showTab(store.get('boozyBingo.tab.' + mode, firstTab(mode)));
+    if (mode === 'home') showMode('home'); else openGame(mode);
     renderSpotify();
   })();
 };
