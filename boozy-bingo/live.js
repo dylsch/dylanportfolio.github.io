@@ -50,7 +50,7 @@ window.startBoozyLive = ctx => {
     await update({ open: false, mode: 'ended' });
     unsubs.forEach(u => u()); unsubs = [];
     gameId = null; game = null; players = []; setId(null);
-    render();
+    render(); renderTeams();
   }
 
   function listen() {
@@ -58,12 +58,14 @@ window.startBoozyLive = ctx => {
     unsubs = [
       fs.onSnapshot(gameRef(), snap => {
         if (!snap.exists() || snap.data().mode === 'ended') { gameId = null; game = null; setId(null); render(); return; }
+        const first = !game;
         game = snap.data(); render(); renderQuizInfo();
+        if (first) renderTeams();
       }, e => { toast('⚠️ Live game: ' + e.message); gameId = null; setId(null); render(); }),
       fs.onSnapshot(fs.collection(db, 'games', gameId, 'players'), snap => {
         players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         players.forEach(checkBingo);
-        render(); renderQuizInfo();
+        render(); renderQuizInfo(); renderTeams(); checkAllAnswered();
       })
     ];
   }
@@ -94,42 +96,136 @@ window.startBoozyLive = ctx => {
   });
 
   // ---------- Quiz ----------
+  // Scoring: a right answer earns 500 points plus up to 500 more the faster it came in, timed
+  // between server timestamps so phone clocks don't matter. A team scores the total of its members.
   const qKey = q => `${q.round}_${q.i}`;
+  const quizResults = () => (game && game.quiz && game.quiz.results) || {};
+  const playerPts = (id, round, results = quizResults()) => Object.entries(results)
+    .filter(([k]) => k.startsWith(round + '_')).reduce((n, [, r]) => n + ((r[id] && r[id].pts) || 0), 0);
+  const teamNames = () => (window.boozyQuiz ? window.boozyQuiz.teams() : []);
+  const secs = ms => (ms / 1000).toFixed(1) + 's';
+  let allAnsweredKey = null;
+
   window.addEventListener('boozy:quiz', e => {
     const q = lastQuiz = e.detail;
     if (!game) return;
+    const key = qKey(q);
     const data = {
       mode: 'quiz', 'quiz.round': q.round, 'quiz.i': q.i, 'quiz.total': q.total, 'quiz.q': q.q, 'quiz.opts': q.opts,
-      'quiz.revealed': !!q.revealed, 'quiz.answer': q.revealed ? q.answer : null, 'quiz.done': !!q.done
+      'quiz.revealed': !!q.revealed, 'quiz.answer': q.revealed ? q.answer : null, 'quiz.done': !!q.done,
+      'quiz.timer': q.timer || 0, teams: teamNames()
     };
-    const results = (game.quiz && game.quiz.results) || {};
-    if (q.revealed && !results[qKey(q)]) {
-      const right = players.filter(p => p.answers && p.answers[qKey(q)] === q.answer).map(p => p.id);
-      data['quiz.results.' + qKey(q)] = right;
-      results[qKey(q)] = right;
+    if (!q.revealed && !q.done && (game.quiz || {}).key !== key) { data['quiz.key'] = key; data['quiz.askedAt'] = fs.serverTimestamp(); }
+    const results = { ...quizResults() };
+    if (q.revealed && !results[key]) {
+      results[key] = score(q, key);
+      data['quiz.results.' + key] = results[key];
+      const best = Object.entries(results[key]).sort((a, b) => a[1].ms - b[1].ms)[0];
+      data['quiz.fastest'] = best ? { key, name: (players.find(p => p.id === best[0]) || {}).name || '?', ms: best[1].ms } : { key, name: null };
     }
-    if (q.revealed || q.done) data['quiz.board'] = board(q.round, results);
+    if (q.revealed || q.done) Object.assign(data, boards(q.round, results));
     update(data);
-    renderQuizInfo();
+    renderQuizInfo(); checkAllAnswered();
   });
-  function board(round, results) {
-    return players.map(p => ({ name: p.name, pts: Object.entries(results).filter(([k, l]) => k.startsWith(round + '_') && l.includes(p.id)).length }))
-      .sort((a, b) => b.pts - a.pts);
+
+  function score(q, key) {
+    const asked = ms(game.quiz && game.quiz.askedAt), scale = (q.timer || 20) * 1000, out = {};
+    players.forEach(p => {
+      if (!p.answers || p.answers[key] !== q.answer) return;
+      const t = ms(p.times && p.times[key]);
+      const took = asked && t ? Math.max(0, t - asked) : scale;
+      out[p.id] = { pts: Math.round(500 + 500 * Math.max(0, 1 - took / scale)), ms: took };
+    });
+    return out;
   }
-  // A line on the big-screen quiz showing how many phones have answered.
+  function boards(round, results) {
+    const board = players.map(p => ({ id: p.id, name: p.name, team: p.team || '', pts: playerPts(p.id, round, results) }))
+      .sort((a, b) => b.pts - a.pts);
+    const totals = {};
+    board.forEach(b => { if (b.team) totals[b.team] = (totals[b.team] || 0) + b.pts; });
+    const teamBoard = Object.entries(totals).map(([team, pts]) => ({ team, pts })).sort((a, b) => b.pts - a.pts);
+    return { 'quiz.board': board, 'quiz.teamBoard': teamBoard };
+  }
+
+  // Tell quiz.js once every phone has answered, so it can auto-reveal.
+  function checkAllAnswered() {
+    const q = lastQuiz;
+    if (!game || !q || q.revealed || q.done || !players.length) return;
+    const key = qKey(q);
+    if (allAnsweredKey !== key && players.every(p => p.answers && p.answers[key] !== undefined)) {
+      allAnsweredKey = key;
+      window.dispatchEvent(new CustomEvent('boozy:all-answered', { detail: key }));
+    }
+  }
+
+  // Live info on the big-screen quiz: answer count, fastest player, team standings.
   function renderQuizInfo() {
     const el = $('#qzLive');
-    if (!el) return;
-    if (!game || !lastQuiz || !players.length || lastQuiz.done) { el.textContent = ''; return; }
-    const k = qKey(lastQuiz);
-    const answered = players.filter(p => p.answers && p.answers[k] !== undefined);
-    if (!lastQuiz.revealed) el.textContent = `📱 ${answered.length} of ${players.length} phones answered`;
-    else {
-      const right = ((game.quiz && game.quiz.results && game.quiz.results[k]) || []).map(id => (players.find(p => p.id === id) || {}).name).filter(Boolean);
-      el.textContent = right.length ? `📱 Right on their phones: ${right.join(', ')}` : '📱 Nobody got it right on their phone. Everyone drinks!';
+    if (el) {
+      if (!game || !lastQuiz || !players.length || lastQuiz.done) el.textContent = '';
+      else {
+        const k = qKey(lastQuiz), r = quizResults()[k];
+        if (!lastQuiz.revealed) el.textContent = `📱 ${players.filter(p => p.answers && p.answers[k] !== undefined).length} of ${players.length} phones answered`;
+        else if (r) {
+          const right = Object.entries(r).sort((a, b) => a[1].ms - b[1].ms).map(([id, x]) => `${(players.find(p => p.id === id) || {}).name || '?'} (${secs(x.ms)})`);
+          el.textContent = right.length ? `⚡ Fastest: ${right[0]}${right.length > 1 ? ` · also right: ${right.slice(1).join(', ')}` : ''}` : '📱 Nobody got it right. Everyone drinks!';
+        }
+      }
+    }
+    const sc = $('#qzLiveScores');
+    if (sc && game && lastQuiz) {
+      const b = boards(lastQuiz.round, quizResults());
+      const tb = b['quiz.teamBoard'];
+      sc.innerHTML = tb.length
+        ? `<div class="row qwho">${tb.map((t, i) => `<span class="pill ${i === 0 ? 'ok' : ''}" style="font-size:15px">${i === 0 ? '👑 ' : ''}${esc(t.team)}: ${t.pts}</span>`).join('')}</div>`
+        : `<div class="row qwho">${b['quiz.board'].slice(0, 6).map((p, i) => `<span class="pill ${i === 0 ? 'ok' : ''}" style="font-size:15px">${esc(p.name)}: ${p.pts}</span>`).join('')}</div>`;
+    }
+    const fb = $('#qzLiveBoard');
+    if (fb && game && lastQuiz) {
+      const b = boards(lastQuiz.round, quizResults()), tb = b['quiz.teamBoard'], pb = b['quiz.board'];
+      const list = (rows, label) => `<ol class="qboard">${rows.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(label(r))}</span><b>${r.pts}</b></li>`).join('')}</ol>`;
+      fb.innerHTML = (tb.length ? list(tb, r => r.team) + (tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? `<p class="qsip">🍻 ${esc(tb[tb.length - 1].team)}: last place, everyone on the team finishes their drink!</p>` : '') + '<h3 style="text-align:center;margin-top:18px">Top players</h3>' : '')
+        + list(pb.slice(0, tb.length ? 5 : 20), r => r.name + (r.team ? ` · ${r.team}` : ''));
     }
   }
   window.addEventListener('boozy:quiz-rendered', renderQuizInfo);
+
+  // Team assignment panel on the quiz setup screen.
+  function renderTeams() {
+    const el = $('#qzTeams');
+    if (!el) return;
+    const names = teamNames();
+    if (!game) {
+      el.innerHTML = `<div class="card"><h2>📱 Phone teams</h2><p class="hint">Start a live game in the <b>📱 Live game</b> tab and show the QR code. Everyone who joins appears here, ready to be put into teams.</p></div>`;
+      return;
+    }
+    const cols = [...names];
+    if (players.some(p => !names.includes(p.team || ''))) cols.push('');
+    el.innerHTML = `<div class="card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">📱 Phone teams</h2><span class="pill">${players.length} on phones</span></div>
+      <p class="hint">Put everyone in a team before you start. A right answer earns 500–1000 points (the faster, the more), and each team scores its members' total.</p>
+      ${players.length ? `<div class="row">
+          <button class="btn primary" id="tmShuffle" ${names.length ? '' : 'disabled'}>🎲 Shuffle into teams</button>
+          <button class="btn" id="tmClear">Clear teams</button>
+        </div>
+        <div class="tmgrid">${cols.map(t => `<div class="tmcol"><h3>${t ? esc(t) : 'No team yet'}</h3>${players.filter(p => t ? p.team === t : !names.includes(p.team || '')).map(p => `
+          <div class="tmp"><span>${esc(p.name)}</span><select data-team="${esc(p.id)}" aria-label="Team for ${esc(p.name)}">
+            ${['', ...names].map(n => `<option value="${esc(n)}" ${n === (names.includes(p.team) ? p.team : '') ? 'selected' : ''}>${n ? esc(n) : 'No team'}</option>`).join('')}
+          </select></div>`).join('') || '<p class="hint">Nobody yet</p>'}</div>`).join('')}</div>`
+        : '<p class="hint">Nobody has joined yet. Show the QR code from the Live game tab.</p>'}
+    </div>`;
+    const setTeam = (id, team) => fs.updateDoc(fs.doc(db, 'games', gameId, 'players', id), { team }).catch(err => toast('⚠️ ' + err.message));
+    el.querySelectorAll('[data-team]').forEach(sel => sel.onchange = () => setTeam(sel.dataset.team, sel.value));
+    const sh = $('#tmShuffle');
+    if (sh) sh.onclick = () => {
+      const order = players.map(p => p.id).sort(() => Math.random() - .5);
+      Promise.all(order.map((id, i) => setTeam(id, names[i % names.length]))).then(() => toast('🎲 Teams shuffled'));
+    };
+    const cl = $('#tmClear');
+    if (cl) cl.onclick = () => Promise.all(players.map(p => setTeam(p.id, '')));
+  }
+  window.addEventListener('boozy:quiz-setup', () => { renderTeams(); if (game) update({ teams: teamNames() }); });
+  window.boozyLive = { playerCount: () => (game ? players.length : 0) };
 
   // ---------- UI ----------
   function render() {
@@ -151,7 +247,7 @@ window.startBoozyLive = ctx => {
       };
       return;
     }
-    const url = joinUrl(), results = (game.quiz && game.quiz.results) || {};
+    const url = joinUrl();
     const round = game.quiz && game.quiz.round;
     host.innerHTML = `<div class="grid2">
       <div class="card" style="text-align:center">
@@ -177,9 +273,9 @@ window.startBoozyLive = ctx => {
             <button class="btn${game.mode === 'lobby' ? ' primary' : ''}" data-mode="lobby">⏸ Waiting screen</button>
           </div>
           <div class="lvplayers">${players.length ? players.map(p => {
-            const pts = round ? Object.entries(results).filter(([k, l]) => k.startsWith(round + '_') && l.includes(p.id)).length : 0;
+            const pts = round ? playerPts(p.id, round) : 0;
             const b = p.bingoResult;
-            return `<div class="lvp"><b>${esc(p.name)}</b>
+            return `<div class="lvp"><b>${esc(p.name)}</b>${p.team ? `<span class="pill">${esc(p.team)}</span>` : ''}
               ${b ? `<span class="pill ${b.ok ? 'ok' : 'bad'}">${b.ok ? (b.full ? 'FULL HOUSE' : 'BINGO') : 'false bingo'}</span>` : ''}
               ${round ? `<span class="pill">${pts} pts</span>` : ''}
               <button class="lvkick" data-kick="${esc(p.id)}" title="Remove player">✕</button></div>`;

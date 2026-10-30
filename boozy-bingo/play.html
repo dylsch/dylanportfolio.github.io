@@ -51,6 +51,9 @@ input:focus { outline: 2px solid var(--accent); }
 .verdict.no { background: rgba(255,107,107,.15); color: var(--danger); }
 
 .qnum { color: var(--accent); font-weight: 600; font-size: 13px; }
+.qhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.qtime { font: 700 18px Fredoka, sans-serif; color: var(--accent); }
+.team { display: inline-block; background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 0 8px; font-weight: 600; font-size: 12px; }
 .qq { font-size: 21px; line-height: 1.25; margin: 6px 0 14px; }
 .opts { display: grid; gap: 10px; }
 .opt { display: flex; align-items: center; gap: 12px; text-align: left; background: var(--bg); color: var(--text); border: 2px solid var(--line); border-radius: 14px; padding: 13px 14px; font: 600 16px Inter, sans-serif; cursor: pointer; }
@@ -66,7 +69,7 @@ input:focus { outline: 2px solid var(--accent); }
 .board li { counter-increment: r; display: flex; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; margin-bottom: 7px; font-size: 16px; }
 .board li::before { content: counter(r) "."; color: var(--muted); }
 .board li span { flex: 1; }
-.board li.me { border-color: var(--accent); background: rgba(255,178,56,.12); }
+.board li.mine { border-color: var(--accent); background: rgba(255,178,56,.12); }
 .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 22px; }
 </style>
 </head>

@@ -58,10 +58,10 @@ service cloud.firestore {
         allow get: if isSelf(uid) || isGameHost();
         allow list: if isGameHost();
         allow create: if isSelf(uid) && game().open == true && validName()
-          && request.resource.data.keys().hasOnly(['name', 'card', 'joinedAt', 'answers', 'bingoAt']);
+          && request.resource.data.keys().hasOnly(['name', 'card', 'joinedAt', 'answers', 'times', 'bingoAt']);
         allow update: if isGameHost()
           || (isSelf(uid) && validName()
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'answers', 'bingoAt']));
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'answers', 'times', 'bingoAt']));
         allow delete: if isGameHost();
       }
     }

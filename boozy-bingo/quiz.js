@@ -52,9 +52,11 @@ window.startBoozyQuiz = () => {
     ['What is Wednesday Addams\'s brother called?', 'Pugsley', 'Fester', 'Lurch', 'Cousin Itt', 'In the original 1930s cartoons, the family had no names at all.']
   ].map(([q, a, w1, w2, w3, fact]) => ({ q, a, wrong: [w1, w2, w3], fact }));
 
-  const Q = Object.assign({ count: 15, timer: 20, players: 'Team Pumpkin\nTeam Ghoul', custom: '', round: null }, load());
+  const Q = Object.assign({ count: 15, timer: 20, autoReveal: true, players: 'Team Pumpkin\nTeam Ghoul', custom: '', round: null }, load());
 
   const host = $('#tab-quiz');
+  // Phone players (live.js) take over team scoring when anyone has joined by QR code.
+  const phones = () => !!(window.boozyLive && window.boozyLive.playerCount());
   let timerId = null, timeLeft = 0;
 
   function toast(msg) {
@@ -90,8 +92,10 @@ window.startBoozyQuiz = () => {
           <div><label for="qzCount">Questions</label><input type="number" id="qzCount" min="1" max="${total}" value="${Q.count}"></div>
           <div><label for="qzTimer">Timer (seconds, 0 = off)</label><input type="number" id="qzTimer" min="0" max="300" value="${Q.timer}"></div>
         </div>
-        <label for="qzPlayers">Players or teams (one per line)</label>
+        <label class="check"><input type="checkbox" id="qzAuto" ${Q.autoReveal ? 'checked' : ''}> Auto-reveal the answer when time runs out or every phone has answered</label>
+        <label for="qzPlayers">Teams (one per line)</label>
         <textarea class="short" id="qzPlayers" style="min-height:100px">${esc(Q.players)}</textarea>
+        <p class="hint">Players on phones are put into these teams in the panel below. Without phones, use them for paper or shout-out teams.</p>
         <div class="row mt">
           <button class="btn primary" id="qzNew">${r ? 'New quiz' : 'Prepare quiz'}</button>
           ${r ? `<button class="btn spotify" id="qzResume">▶ ${r.started ? (r.done ? 'Show results' : `Resume (question ${r.i + 1}/${r.qs.length})`) : 'Start quiz'}</button>` : ''}
@@ -109,12 +113,15 @@ window.startBoozyQuiz = () => {
         <textarea class="short" id="qzCustom" placeholder="Question | Right answer | Wrong 1 | Wrong 2 | Wrong 3&#10;Who is the scariest person here? | The host | Nobody | The DJ | Your ex">${esc(Q.custom)}</textarea>
         <p class="hint">One per line: question, then the right answer, then up to three wrong ones, separated by <code>|</code>.</p>
       </div>
-    </div>`;
+    </div>
+    <div id="qzTeams" class="mt"></div>`;
     const read = () => {
       Q.count = Math.max(1, parseInt($('#qzCount').value, 10) || 15);
       Q.timer = Math.max(0, parseInt($('#qzTimer').value, 10) || 0);
       Q.players = $('#qzPlayers').value; Q.custom = $('#qzCustom').value;
+      Q.autoReveal = $('#qzAuto').checked;
       save();
+      window.dispatchEvent(new Event('boozy:quiz-setup'));
     };
     host.querySelectorAll('input, textarea').forEach(el => el.addEventListener('change', read));
     $('#qzNew').onclick = () => {
@@ -131,6 +138,7 @@ window.startBoozyQuiz = () => {
       $('#qzPrintSheets').onclick = printSheets;
       $('#qzPrintKey').onclick = printKey;
     }
+    window.dispatchEvent(new Event('boozy:quiz-setup'));
   }
 
   // ---------- Playing ----------
@@ -143,7 +151,7 @@ window.startBoozyQuiz = () => {
       const el = $('#qzTime'); if (!el) { stopTimer(); return; }
       el.textContent = timeLeft > 0 ? `⏱ ${timeLeft}s` : "⏰ Time's up!";
       el.classList.toggle('low', timeLeft <= 5);
-      if (timeLeft <= 0) stopTimer();
+      if (timeLeft <= 0) { stopTimer(); if (Q.autoReveal && !Q.round.revealed) setTimeout(autoReveal, 600); }
       timeLeft--;
     };
     tick(); timerId = setInterval(tick, 1000);
@@ -165,7 +173,7 @@ window.startBoozyQuiz = () => {
       ${r.revealed ? `<div class="qreveal">
         ${item.fact ? `<p>💡 ${esc(item.fact)}</p>` : ''}
         <p class="qsip">🍺 Got it wrong? Take a sip!</p>
-        ${r.players.length ? `<div class="hint">Who got it right? Tap to give them a point:</div>
+        ${phones() ? '<div id="qzLiveScores"></div>' : r.players.length ? `<div class="hint">Who got it right? Tap to give them a point:</div>
           <div class="row qwho">${r.players.map((p, k) => `<button class="btn${right.includes(k) ? ' primary' : ''}" data-right="${k}">${right.includes(k) ? '✓ ' : ''}${esc(p)}</button>`).join('')}</div>` : ''}
       </div>` : ''}
       <div class="qlive" id="qzLive"></div>
@@ -195,9 +203,20 @@ window.startBoozyQuiz = () => {
     const r = Q.round, item = r.qs[r.i];
     if (!r.id) { r.id = Date.now().toString(36); save(); }
     window.dispatchEvent(new CustomEvent('boozy:quiz', { detail: {
-      round: r.id, i: r.i, total: r.qs.length, q: item.q, opts: item.opts, revealed: r.revealed, answer: item.a, done: !!done
+      round: r.id, i: r.i, total: r.qs.length, q: item.q, opts: item.opts, revealed: r.revealed, answer: item.a, done: !!done,
+      timer: Q.timer
     } }));
   }
+  // Reveal on its own when the timer ends or live.js reports every phone has answered.
+  function autoReveal() {
+    const r = Q.round;
+    if (!r || r.revealed || r.done || !$('#qzStage') || !Q.autoReveal) return;
+    next();
+  }
+  window.addEventListener('boozy:all-answered', e => {
+    const r = Q.round;
+    if (r && e.detail === `${r.id}_${r.i}`) setTimeout(autoReveal, 1200);
+  });
 
   function next() {
     const r = Q.round;
@@ -224,11 +243,12 @@ window.startBoozyQuiz = () => {
     host.innerHTML = `<div class="qstage">
       <div class="qtop"><span class="pill ok">Quiz complete</span><span></span><button class="btn" id="qzExit">Menu</button></div>
       <h2 class="qq">🏆 Final scores</h2>
-      ${scores.length ? `<ol class="qboard">${scores.map(s => `<li class="${s.pts === top ? 'win' : ''}"><span>${s.pts === top ? '👑 ' : ''}${esc(s.name)}</span><b>${s.pts} / ${r.qs.length}</b></li>`).join('')}</ol>
+      ${phones() ? '<div id="qzLiveBoard"></div>' : scores.length ? `<ol class="qboard">${scores.map(s => `<li class="${s.pts === top ? 'win' : ''}"><span>${s.pts === top ? '👑 ' : ''}${esc(s.name)}</span><b>${s.pts} / ${r.qs.length}</b></li>`).join('')}</ol>
         ${scores.length > 1 && top !== bottom ? `<p class="qsip">🍻 ${scores.filter(s => s.pts === bottom).map(s => esc(s.name)).join(' & ')}: last place finishes their drink!</p>` : ''}`
         : '<p class="hint">No players were added, so there are no scores. Hope you had fun!</p>'}
       <div class="qnav"><button class="btn" id="qzReview">◀ Back to last question</button><button class="btn primary" id="qzAgain">Play a new quiz</button></div>
     </div>`;
+    window.dispatchEvent(new Event('boozy:quiz-rendered'));
     $('#qzExit').onclick = renderSetup;
     $('#qzReview').onclick = () => { r.done = false; r.revealed = true; save(); renderStage(); };
     $('#qzAgain').onclick = () => { newRound(); Q.round.started = true; save(); renderStage(); };
@@ -259,6 +279,8 @@ window.startBoozyQuiz = () => {
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
   });
+
+  window.boozyQuiz = { teams: players };
 
   if (Q.round && Q.round.started && Q.round.done) renderResults();
   else if (Q.round && Q.round.started) renderStage();

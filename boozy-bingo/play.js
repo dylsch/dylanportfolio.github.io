@@ -39,6 +39,16 @@ async function main() {
   const marksKey = `boozyBingo.marks.${gameId}`;
   let game = null, me = undefined, tab = null, lastMode = null, joining = false, bingoCooldown = false;
   let marks = new Set(store.get(marksKey, []));
+  // When each question first appeared on this phone, for the on-screen countdown.
+  const seenAt = {};
+  const countdown = q => {
+    const left = Math.max(0, Math.ceil(q.timer - (Date.now() - (seenAt[`${q.round}_${q.i}`] || Date.now())) / 1000));
+    return left ? `⏱ ${left}s` : "⏰ Time's up";
+  };
+  setInterval(() => {
+    const el = $('#qtime'), q = game && game.quiz;
+    if (el && q && !q.revealed && q.timer) el.textContent = countdown(q);
+  }, 500);
 
   fs.onSnapshot(gameRef, snap => {
     game = snap.exists() ? snap.data() : null;
@@ -57,7 +67,7 @@ async function main() {
     if (game.mode === 'ended') return screen('🏁', 'Game over', 'Thanks for playing! 🍻');
     if (!me) return renderJoin();
     joining = false;
-    $('#me').innerHTML = `${esc(me.name)}<br>${esc(game.title || '')}`;
+    $('#me').innerHTML = `${esc(me.name)}<br>${me.team ? `<span class="team">${esc(me.team)}</span>` : esc(game.title || '')}`;
 
     const hasBingo = !!(me.card && game.bingo && game.bingo.songs && game.bingo.songs.length);
     if (!tab) tab = hasBingo ? 'bingo' : 'quiz';
@@ -90,7 +100,7 @@ async function main() {
       const b = game.bingo || {};
       const card = b.songs && b.songs.length >= b.need ? shuffle(b.songs.map(s => s.k)).slice(0, b.need) : null;
       try {
-        await fs.setDoc(meRef, { name, card, joinedAt: fs.serverTimestamp(), answers: {}, bingoAt: null });
+        await fs.setDoc(meRef, { name, card, joinedAt: fs.serverTimestamp(), answers: {}, times: {}, bingoAt: null });
       } catch (e) { joining = false; screen('⚠️', "Couldn't join", esc(e.message)); }
     };
     $('#join').onclick = go;
@@ -133,13 +143,19 @@ async function main() {
   // ---------- Quiz ----------
   function quizHtml() {
     const q = game.quiz || {};
+    const mineIn = rows => rows.findIndex(b => b.id === user.uid);
     if (q.done && q.board) {
-      return `<div class="card"><h2 class="center">🏆 Final scores</h2><ol class="board">${q.board.map(b =>
-        `<li class="${b.name === me.name ? 'me' : ''}"><span>${esc(b.name)}</span><b>${b.pts} / ${q.total}</b></li>`).join('')}</ol>
-        ${q.board.length > 1 && q.board[q.board.length - 1].name === me.name && q.board[0].pts !== q.board[q.board.length - 1].pts ? '<p class="sip">🍻 Last place: finish your drink!</p>' : ''}</div>`;
+      const tb = q.teamBoard || [], last = tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? tb[tb.length - 1].team : null;
+      return `<div class="card"><h2 class="center">🏆 Final scores</h2>
+        ${tb.length ? `<ol class="board">${tb.map((t, i) => `<li class="${t.team === me.team ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(t.team)}</span><b>${t.pts}</b></li>`).join('')}</ol>
+          ${last && last === me.team ? '<p class="sip">🍻 Your team came last: finish your drink!</p>' : ''}
+          <h3 class="center mt">Players</h3>` : ''}
+        <ol class="board">${q.board.map((b, i) => `<li class="${b.id === user.uid ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(b.name)}</span><b>${b.pts}</b></li>`).join('')}</ol>
+        ${!tb.length && q.board.length > 1 && mineIn(q.board) === q.board.length - 1 && q.board[0].pts !== q.board[q.board.length - 1].pts ? '<p class="sip">🍻 Last place: finish your drink!</p>' : ''}</div>`;
     }
-    if (!q.q) return `<div class="card center"><div class="big">🎃</div><h2>Quiz coming up</h2><p class="hint">The questions will appear here when the host starts the quiz.</p></div>`;
+    if (!q.q) return `<div class="card center"><div class="big">🎃</div><h2>Quiz coming up</h2><p class="hint">The questions will appear here when the host starts the quiz.${me.team ? `<br>You're on <b>${esc(me.team)}</b>.` : ''}</p></div>`;
     const key = `${q.round}_${q.i}`, mine = me.answers ? me.answers[key] : undefined;
+    if (!seenAt[key]) seenAt[key] = Date.now();
     const opts = q.opts.map((o, k) => {
       let cls = '';
       if (q.revealed) cls = k === q.answer ? 'right' : k === mine ? 'wrong' : 'dim';
@@ -147,18 +163,24 @@ async function main() {
       return `<button class="opt ${cls}" data-opt="${k}" ${q.revealed ? 'disabled' : ''}><b>${LETTERS[k]}</b><span>${esc(o)}</span></button>`;
     }).join('');
     let foot = '';
-    if (q.revealed) foot = mine === q.answer ? '<p class="sip" style="color:var(--green)">✅ Correct! Hand out a sip 😈</p>'
-      : `<p class="sip" style="color:var(--pink)">🍺 ${mine === undefined ? 'Too slow!' : 'Wrong!'} Take a sip!</p>`;
-    else foot = `<p class="hint center mt">${mine === undefined ? 'Tap your answer' : 'Answer locked in. You can change it until the host reveals it.'}</p>`;
-    const pts = q.board ? (q.board.find(b => b.name === me.name) || {}).pts : undefined;
-    return `<div class="card"><div class="qnum">Question ${q.i + 1} / ${q.total}${pts !== undefined ? ` · ${pts} pts` : ''}</div>
+    if (q.revealed) {
+      const res = q.results && q.results[key] && q.results[key][user.uid];
+      foot = res ? `<p class="sip" style="color:var(--green)">✅ Correct! +${res.pts} pts (${(res.ms / 1000).toFixed(1)}s)</p>`
+        : `<p class="sip" style="color:var(--pink)">🍺 ${mine === undefined ? 'Too slow!' : 'Wrong!'} Take a sip!</p>`;
+      if (q.fastest && q.fastest.key === key && q.fastest.name) foot += `<p class="hint center">⚡ Fastest: <b>${esc(q.fastest.name)}</b> (${(q.fastest.ms / 1000).toFixed(1)}s)</p>`;
+    } else foot = `<p class="hint center mt">${mine === undefined ? 'Quick! The faster you answer, the more points you get.' : 'Answer locked in. You can change it until the answer is revealed, but your time restarts.'}</p>`;
+    const myRow = q.board ? q.board.find(b => b.id === user.uid) : null;
+    const myTeam = me.team && q.teamBoard ? q.teamBoard.find(t => t.team === me.team) : null;
+    return `<div class="card"><div class="qhead"><span class="qnum">Question ${q.i + 1} / ${q.total}${myRow ? ` · ${myRow.pts} pts` : ''}${myTeam ? ` · ${esc(me.team)} ${myTeam.pts}` : ''}</span>
+      ${!q.revealed && q.timer ? `<span class="qtime" id="qtime">${countdown(q)}</span>` : ''}</div>
       <h2 class="qq">${esc(q.q)}</h2><div class="opts">${opts}</div>${foot}</div>`;
   }
   function bindQuiz() {
     view.querySelectorAll('[data-opt]').forEach(b => b.onclick = () => {
       const q = game.quiz;
       if (!q || q.revealed) return;
-      fs.updateDoc(meRef, { [`answers.${q.round}_${q.i}`]: Number(b.dataset.opt) }).catch(e => alert(e.message));
+      const key = `${q.round}_${q.i}`;
+      fs.updateDoc(meRef, { [`answers.${key}`]: Number(b.dataset.opt), [`times.${key}`]: fs.serverTimestamp() }).catch(e => alert(e.message));
     });
   }
 }
