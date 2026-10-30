@@ -25,7 +25,7 @@ Commit `firebase-config.js` and push. Open the page, sign in with your account, 
 ## Good to know
 - The Firebase config values are meant to be public. What keeps people out is the Firestore rules: only your verified email can approve people, and anyone else can only file one request for themselves.
 - GitHub Pages serves the page code publicly, so the gate stops anyone else from using *your* app. A technical person could still copy the code and run their own version. They would never get your Spotify account or your data.
-- Live games: open the **📱 Live game** tab (online, signed in) and show the QR code. A player can only see the game whose code they scanned, only edit their own name and answers, and can't change their card or award themselves a bingo. Approved friends can host their own live games too.
+- Live games: open **📱 Play on phones** (or **📱 Let players join** in the quiz menu) (online, signed in) and show the QR code. A player can only see the game whose code they scanned, only edit their own name and answers, and can't change their card or award themselves a bingo. Approved friends can host their own live games too.
 - If you update the rules later, re-publish the whole `firestore.rules` file in the console (with your email filled in).
 - You only see new requests while the app is open. Email alerts would need Firebase's paid plan (Cloud Functions) or a service like EmailJS.
 - Remove someone from **Allowed people** and their open app locks immediately.

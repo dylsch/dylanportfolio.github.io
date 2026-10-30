@@ -196,7 +196,7 @@ window.startBoozyLive = ctx => {
     if (!el) return;
     const names = teamNames();
     if (!game) {
-      el.innerHTML = `<div class="card"><h2>📱 Phone teams</h2><p class="hint">Start a live game in the <b>📱 Live game</b> tab and show the QR code. Everyone who joins appears here, ready to be put into teams.</p></div>`;
+      el.innerHTML = `<div class="card"><h2>📱 Phone teams</h2><p class="hint">Start a live game in <b>1 📱 Let players join</b> and show the QR code. Everyone who joins appears here, ready to be put into teams.</p></div>`;
       return;
     }
     const cols = [...names];
@@ -212,7 +212,7 @@ window.startBoozyLive = ctx => {
           <div class="tmp"><span>${esc(p.name)}</span><select data-team="${esc(p.id)}" aria-label="Team for ${esc(p.name)}">
             ${['', ...names].map(n => `<option value="${esc(n)}" ${n === (names.includes(p.team) ? p.team : '') ? 'selected' : ''}>${n ? esc(n) : 'No team'}</option>`).join('')}
           </select></div>`).join('') || '<p class="hint">Nobody yet</p>'}</div>`).join('')}</div>`
-        : '<p class="hint">Nobody has joined yet. Show the QR code from the Live game tab.</p>'}
+        : '<p class="hint">Nobody has joined yet. Show the QR code from <b>1 📱 Let players join</b>.</p>'}
     </div>`;
     const setTeam = (id, team) => fs.updateDoc(fs.doc(db, 'games', gameId, 'players', id), { team }).catch(err => toast('⚠️ ' + err.message));
     el.querySelectorAll('[data-team]').forEach(sel => sel.onchange = () => setTeam(sel.dataset.team, sel.value));
@@ -306,6 +306,5 @@ window.startBoozyLive = ctx => {
     if (ov.requestFullscreen) ov.requestFullscreen().catch(() => {});
   }
 
-  $('#liveTabBtn').hidden = false;
   if (gameId) listen(); else render();
 };

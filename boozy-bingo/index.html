@@ -47,6 +47,10 @@ header.top {
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #6c5a78; display: inline-block; }
 .dot.on { background: var(--green); }
 
+.modes { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px; margin: 4px 0 14px; max-width: 100%; }
+.modes button { background: none; border: 0; color: var(--muted); font: 600 16px Fredoka, sans-serif; padding: 9px 18px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
+.modes button.active { background: var(--accent); color: var(--accent-ink); }
+@media (max-width: 420px) { .modes { display: grid; } .modes button { padding: 9px 8px; font-size: 15px; } }
 nav.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
 nav.tabs button {
   background: none; border: 0; color: var(--muted); font: 600 15px Fredoka, sans-serif;
@@ -279,14 +283,21 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     </div>
   </header>
 
+  <div class="modes" id="modes" role="tablist" aria-label="Game">
+    <button data-mode="bingo" class="active">🎵 Boozy Bingo</button>
+    <button data-mode="quiz">🎃 Halloween Quiz</button>
+  </div>
+
+  <!-- data-group says which game's menu a tab belongs to; the phones and access tabs appear in both. -->
   <nav class="tabs" id="tabs">
-    <button data-tab="songs" class="active"><span class="n">1</span>Songs</button>
-    <button data-tab="cards"><span class="n">2</span>Bingo cards</button>
-    <button data-tab="spotify"><span class="n">3</span>Spotify playlist</button>
-    <button data-tab="host"><span class="n">4</span>Host the game</button>
-    <button data-tab="quiz">🎃 Quiz</button>
-    <button data-tab="live" id="liveTabBtn">📱 Live game</button>
-    <button data-tab="access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
+    <button data-tab="songs" data-group="bingo" class="active"><span class="n">1</span>Songs</button>
+    <button data-tab="cards" data-group="bingo"><span class="n">2</span>Bingo cards</button>
+    <button data-tab="spotify" data-group="bingo"><span class="n">3</span>Spotify playlist</button>
+    <button data-tab="host" data-group="bingo"><span class="n">4</span>Host the game</button>
+    <button data-tab="live" data-group="bingo"><span class="n">5</span>📱 Play on phones</button>
+    <button data-tab="live" data-group="quiz" hidden><span class="n">1</span>📱 Let players join</button>
+    <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🎃 Run the quiz</button>
+    <button data-tab="access" data-group="bingo quiz" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -676,14 +687,31 @@ Kanye West - Gold Digger`
   const songsToText = songs => songs.map(s => s.artist ? `${s.artist} - ${s.title}` : s.title).join('\n');
 
   // ---------- Tabs ----------
+  // Two menus (bingo and quiz), each remembering its own last tab.
+  const inGroup = (b, mode) => b.dataset.group.split(' ').includes(mode);
+  let mode = store.get('boozyBingo.mode', 'bingo');
+  function showMode(m) {
+    mode = m;
+    $$('#modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    // The access tab is admin-only: gate.js unhides it, so keep it out of this toggle.
+    $$('#tabs button:not(#accessTabBtn)').forEach(b => { b.hidden = !inGroup(b, m); });
+    store.set('boozyBingo.mode', m);
+  }
   function showTab(name) {
+    const btns = $$('#tabs button').filter(b => b.dataset.tab === name);
+    if (btns.length && !btns.some(b => inGroup(b, mode))) showMode(btns[0].dataset.group.split(' ')[0]);
     $$('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     $$('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
     if (name === 'host') renderHost();
     if (name === 'cards') renderCardStatus();
-    store.set('boozyBingo.tab', name);
+    store.set('boozyBingo.tab.' + mode, name);
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
+  $('#modes').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    showMode(b.dataset.mode);
+    showTab(store.get('boozyBingo.tab.' + b.dataset.mode, b.dataset.mode === 'quiz' ? 'quiz' : 'songs'));
+  });
 
   // ---------- Songs tab ----------
   function cellsNeeded() { const n = state.grid * state.grid; return n - (state.free && state.grid % 2 ? 1 : 0); }
@@ -1114,7 +1142,8 @@ Kanye West - Gold Digger`
     $('#plName').value = state.playlistName || '';
     $('#plName').placeholder = `${state.title} · ${state.code}`;
     if (state.playlistUrl) { const a = $('#plLink'); a.href = state.playlistUrl; a.style.display = ''; }
-    showTab(store.get('boozyBingo.tab', 'songs'));
+    showMode(mode);
+    showTab(store.get('boozyBingo.tab.' + mode, mode === 'quiz' ? 'quiz' : 'songs'));
     renderSpotify();
   })();
 };
