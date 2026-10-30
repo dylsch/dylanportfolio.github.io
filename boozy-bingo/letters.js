@@ -47,7 +47,7 @@ window.startBoozyLetters = () => {
 
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(M)); } catch {} };
-  const M = Object.assign({ packs: ['everyday', 'food', 'pop', 'places'], custom: '', count: 10, timer: 30, easy: true, deck: null }, load());
+  const M = Object.assign({ packs: ['everyday', 'food', 'pop', 'places'], custom: '', count: 10, timer: 30, easy: true, every: 5, deck: null }, load());
   let timerId = null, autoTimer = null, rollId = null;
 
   const live = () => (window.boozyLive && window.boozyLive.active() ? window.boozyLive : null);
@@ -118,6 +118,7 @@ window.startBoozyLetters = () => {
         <div class="fields">
           <div><label for="lrCount">Rounds</label><input type="number" id="lrCount" min="1" max="100" value="${M.count}"></div>
           <div><label for="lrTimer">Time per round (seconds)</label><input type="number" id="lrTimer" min="5" max="180" value="${M.timer}"></div>
+          <div><label for="lrEvery">Leaderboard every … rounds (0 = off)</label><input type="number" id="lrEvery" min="0" max="50" value="${M.every}"></div>
         </div>
         <label class="check"><input type="checkbox" id="lrEasy" ${M.easy ? 'checked' : ''}> Leave out the hard letters (Q, U, V, X, Y, Z)</label>
         <div class="row mt">
@@ -137,6 +138,7 @@ window.startBoozyLetters = () => {
       M.count = Math.max(1, parseInt($('#lrCount').value, 10) || 10);
       M.timer = Math.max(5, parseInt($('#lrTimer').value, 10) || 30);
       M.easy = $('#lrEasy').checked; M.custom = $('#lrCustom').value;
+      M.every = Math.max(0, parseInt($('#lrEvery').value, 10) || 0);
       save();
       $('#lrNew').disabled = !categories().length;
     };
@@ -146,7 +148,7 @@ window.startBoozyLetters = () => {
       if (M.deck && !M.deck.done && M.deck.i > 0 && !confirm('Start a new game? The current scores will be cleared.')) return;
       newDeck(); renderStage();
     };
-    if (d) $('#lrResume').onclick = () => { read(); d.done ? renderEnd() : renderStage(); };
+    if (d) $('#lrResume').onclick = () => { read(); d.done ? renderEnd() : d.standings ? renderStandings() : renderStage(); };
     renderPhoneHint();
   }
   function renderPhoneHint() {
@@ -165,7 +167,7 @@ window.startBoozyLetters = () => {
     l.update({ mode: 'letters', letters: {
       key: key(), i: d.i, total: d.list.length, letter: r.rolled ? item.letter : null, category: item.category, timer: M.timer,
       revealed: !!r.revealed, results: r.results ? scored(r.results, item.letter).map(({ reject, ...x }) => x) : null,
-      board: board().slice(0, 30), done: !!d.done
+      board: board().slice(0, 30), done: !!d.done, standings: !!d.standings
     } });
   }
 
@@ -253,7 +255,24 @@ window.startBoozyLetters = () => {
   function advance() {
     const d = M.deck;
     if (d.i >= d.list.length - 1) { d.done = true; save(); renderEnd(); return; }
-    d.i++; save(); renderStage();
+    // A leaderboard break after every M.every rounds, once anyone has scored on a phone.
+    if (!d.standings && M.every > 0 && (d.i + 1) % M.every === 0 && board().length) { d.standings = true; save(); renderStandings(); return; }
+    d.standings = false; d.i++; save(); renderStage();
+  }
+  function renderStandings() {
+    stop();
+    const d = M.deck, b = board();
+    host.innerHTML = `<div class="qstage">
+      <div class="qtop"><span class="pill warn">🔤 After round ${d.i + 1} / ${d.list.length}</span><span></span><button class="btn" id="lrExit">Menu</button></div>
+      <h2 class="qq">📊 Leaderboard</h2>
+      <ol class="qboard">${b.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(r.name)}</span><b>${r.pts}</b></li>`).join('')}</ol>
+      ${b.length > 1 && b[0].pts !== b[b.length - 1].pts ? `<p class="qsip">🍺 ${esc(b[b.length - 1].name)}: you're last, take a sip!</p>` : ''}
+      <div class="qnav"><button class="btn" id="lrBack">◀ Back</button><button class="btn primary" id="lrNext">Next round ▶</button></div>
+    </div>`;
+    $('#lrExit').onclick = renderSetup;
+    $('#lrBack').onclick = () => { d.standings = false; save(); renderStage(); };
+    $('#lrNext').onclick = advance;
+    announce();
   }
 
   function renderEnd() {

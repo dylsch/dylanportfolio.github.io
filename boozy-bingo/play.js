@@ -195,6 +195,7 @@ async function main() {
     const board = (l.board || []).length ? `<ol class="board">${l.board.map((b, i) =>
       `<li class="${b.id === user.uid ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(b.name)}</span><b>${b.pts}</b></li>`).join('')}</ol>` : '';
     if (l.done) return `<div class="card"><h2 class="center">🏆 Final scores</h2>${board || '<p class="hint center">Thanks for playing!</p>'}</div>`;
+    if (l.standings) return `<div class="card"><h2 class="center">📊 Leaderboard</h2><p class="hint center">After round ${l.i + 1} of ${l.total}. Next round coming up!</p>${board}</div>`;
     const head = `<div class="qhead"><span class="qnum">Round ${l.i + 1} / ${l.total}</span>${l.letter && !l.revealed ? `<span class="qtime" id="lrtime">${lrCountdown(l)}</span>` : ''}</div>
       <h2 class="qq">${esc(l.category)}</h2><p class="mlwho">starting with</p><div class="lrbig">${l.letter || '?'}</div>`;
     if (!l.letter) return `<div class="card center">${head}<p class="hint">Picking a letter…</p></div>`;
@@ -232,6 +233,12 @@ async function main() {
   function quizHtml() {
     const q = game.quiz || {};
     const mineIn = rows => rows.findIndex(b => b.id === user.uid);
+    if (q.standings && q.board && !q.done) {
+      const tb = q.teamBoard || [];
+      return `<div class="card"><h2 class="center">📊 Leaderboard</h2><p class="hint center">After question ${q.i + 1} of ${q.total}. Next question coming up!</p>
+        ${tb.length ? `<ol class="board">${tb.map((t, i) => `<li class="${t.team === me.team ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(t.team)}</span><b>${t.pts}</b></li>`).join('')}</ol><h3 class="center mt">Players</h3>` : ''}
+        <ol class="board">${q.board.map((b, i) => `<li class="${b.id === user.uid ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(b.name)}</span><b>${b.pts}</b></li>`).join('')}</ol></div>`;
+    }
     if (q.done && q.board) {
       const tb = q.teamBoard || [], last = tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? tb[tb.length - 1].team : null;
       return `<div class="card"><h2 class="center">🏆 Final scores</h2>

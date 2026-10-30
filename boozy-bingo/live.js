@@ -114,7 +114,7 @@ window.startBoozyLive = ctx => {
     const data = {
       mode: 'quiz', 'quiz.round': q.round, 'quiz.i': q.i, 'quiz.total': q.total, 'quiz.q': q.q, 'quiz.opts': q.opts,
       'quiz.revealed': !!q.revealed, 'quiz.answer': q.revealed ? q.answer : null, 'quiz.done': !!q.done,
-      'quiz.timer': q.timer || 0, teams: teamNames()
+      'quiz.timer': q.timer || 0, 'quiz.standings': !!q.standings, teams: teamNames()
     };
     if (!q.revealed && !q.done && (game.quiz || {}).key !== key) { data['quiz.key'] = key; data['quiz.askedAt'] = fs.serverTimestamp(); }
     const results = { ...quizResults() };
@@ -185,7 +185,7 @@ window.startBoozyLive = ctx => {
     if (fb && game && lastQuiz) {
       const b = boards(lastQuiz.round, quizResults()), tb = b['quiz.teamBoard'], pb = b['quiz.board'];
       const list = (rows, label) => `<ol class="qboard">${rows.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(label(r))}</span><b>${r.pts}</b></li>`).join('')}</ol>`;
-      fb.innerHTML = (tb.length ? list(tb, r => r.team) + (tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? `<p class="qsip">🍻 ${esc(tb[tb.length - 1].team)}: last place, everyone on the team finishes their drink!</p>` : '') + '<h3 style="text-align:center;margin-top:18px">Top players</h3>' : '')
+      fb.innerHTML = (tb.length ? list(tb, r => r.team) + (tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? `<p class="qsip">${lastQuiz.done ? `🍻 ${esc(tb[tb.length - 1].team)}: last place, everyone on the team finishes their drink!` : `🍺 ${esc(tb[tb.length - 1].team)}: you're last, everyone on the team takes a sip!`}</p>` : '') + '<h3 style="text-align:center;margin-top:18px">Top players</h3>' : '')
         + list(pb.slice(0, tb.length ? 5 : 20), r => r.name + (r.team ? ` · ${r.team}` : ''));
     }
   }
