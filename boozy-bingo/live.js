@@ -169,7 +169,7 @@ window.startBoozyLive = ctx => {
         if (!lastQuiz.revealed) el.textContent = `📱 ${players.filter(p => p.answers && p.answers[k] !== undefined).length} of ${players.length} phones answered`;
         else if (r) {
           const right = Object.entries(r).sort((a, b) => a[1].ms - b[1].ms).map(([id, x]) => `${(players.find(p => p.id === id) || {}).name || '?'} (${secs(x.ms)})`);
-          el.textContent = right.length ? `⚡ Fastest: ${right[0]}${right.length > 1 ? ` · also right: ${right.slice(1).join(', ')}` : ''}` : '📱 Nobody got it right. Everyone drinks!';
+          el.textContent = right.length ? `⚡ Fastest: ${right[0]}${right.length > 1 ? ` · also right: ${right.slice(1).join(', ')}` : ''}` : '📱 Nobody got it right this time!';
         }
       }
     }
@@ -185,7 +185,7 @@ window.startBoozyLive = ctx => {
     if (fb && game && lastQuiz) {
       const b = boards(lastQuiz.round, quizResults()), tb = b['quiz.teamBoard'], pb = b['quiz.board'];
       const list = (rows, label) => `<ol class="qboard">${rows.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(label(r))}</span><b>${r.pts}</b></li>`).join('')}</ol>`;
-      fb.innerHTML = (tb.length ? list(tb, r => r.team) + (tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? `<p class="qsip">${lastQuiz.done ? `🍻 ${esc(tb[tb.length - 1].team)}: last place, everyone on the team finishes their drink!` : `🍺 ${esc(tb[tb.length - 1].team)}: you're last, everyone on the team takes a sip!`}</p>` : '') + '<h3 style="text-align:center;margin-top:18px">Top players</h3>' : '')
+      fb.innerHTML = (tb.length ? list(tb, r => r.team) + '' + '<h3 style="text-align:center;margin-top:18px">Top players</h3>' : '')
         + list(pb.slice(0, tb.length ? 5 : 20), r => r.name + (r.team ? ` · ${r.team}` : ''));
     }
   }

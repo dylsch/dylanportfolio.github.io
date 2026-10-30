@@ -70,7 +70,8 @@ async function main() {
   function render() {
     if (game === null) return screen('👻', 'Game not found', 'This game has ended or the link is wrong. Ask the host for the QR code.');
     if (!game || me === undefined) return;
-    if (game.mode === 'ended') return screen('🏁', 'Game over', 'Thanks for playing! 🍻');
+    $('#foot').hidden = game.mode !== 'bingo';
+    if (game.mode === 'ended') return screen('🏁', 'Game over', 'Thanks for playing! 🎉');
     if (!me) return renderJoin();
     joining = false;
     $('#me').innerHTML = `${esc(me.name)}<br>${me.team ? `<span class="team">${esc(me.team)}</span>` : esc(game.title || '')}`;
@@ -172,7 +173,7 @@ async function main() {
       const meWin = winners.some(r => r.id === user.uid), myVotes = (res.find(r => r.id === user.uid) || {}).votes || 0;
       return `<div class="card">${head}${res.length ? `<ol class="board">${res.map(r =>
         `<li class="${r.id === user.uid ? 'mine' : ''}"><span>${r.votes === top ? '👑 ' : ''}${esc(r.name)}</span><b>${r.votes}</b></li>`).join('')}</ol>` : ''}
-        <p class="sip" style="color:var(--pink)">${!res.length ? 'Nobody voted. Everybody drinks! 🍻' : meWin ? '🍺 That\'s you! Drink up!' : `🍺 ${winners.map(r => esc(r.name)).join(' & ')} ${winners.length > 1 ? 'drink' : 'drinks'}!`}</p>
+        <p class="sip" style="color:var(--pink)">${!res.length ? 'Nobody voted this time!' : meWin ? '🙋 That\'s you!' : `🙋 It's ${winners.map(r => esc(r.name)).join(' & ')}!`}</p>
         ${res.length && !meWin ? `<p class="hint center">You got ${myVotes} vote${myVotes === 1 ? '' : 's'}.</p>` : ''}</div>`;
     }
     if (!m.choices || !m.choices.length) return `<div class="card center">${head}<p class="sip">👉 On the count of three, point at someone!</p></div>`;
@@ -204,8 +205,8 @@ async function main() {
     if (l.revealed) {
       const res = l.results || [], my = res.find(r => r.id === user.uid);
       const msg = !my ? '' : {
-        unique: `✅ Unique answer! +10`, shared: '🤝 Someone had the same answer: +5. Copycats sip! 🍺',
-        wrong: `❌ That doesn't start with ${esc(l.letter)}. Sip! 🍺`, rejected: '🙅 The host didn\'t accept that one. Sip! 🍺', blank: '⏰ No answer. Sip! 🍺'
+        unique: `✅ Unique answer! +10`, shared: '🤝 Someone had the same answer: +5',
+        wrong: `❌ That doesn't start with ${esc(l.letter)}. No points.`, rejected: '🙅 The host didn\'t accept that one. No points.', blank: '⏰ No answer this time.'
       }[my.status];
       return `<div class="card">${head}${msg ? `<p class="sip">${msg}</p>` : ''}
         <div class="lrlist">${res.map(r => `<div class="${r.id === user.uid ? 'mine' : ''}"><span>${esc(r.name)}</span><b class="${r.status}">${r.answer ? esc(r.answer) : '—'}</b><small>${r.pts ? '+' + r.pts : '0'}</small></div>`).join('')}</div>
@@ -243,10 +244,9 @@ async function main() {
       const tb = q.teamBoard || [], last = tb.length > 1 && tb[0].pts !== tb[tb.length - 1].pts ? tb[tb.length - 1].team : null;
       return `<div class="card"><h2 class="center">🏆 Final scores</h2>
         ${tb.length ? `<ol class="board">${tb.map((t, i) => `<li class="${t.team === me.team ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(t.team)}</span><b>${t.pts}</b></li>`).join('')}</ol>
-          ${last && last === me.team ? '<p class="sip">🍻 Your team came last: finish your drink!</p>' : ''}
           <h3 class="center mt">Players</h3>` : ''}
         <ol class="board">${q.board.map((b, i) => `<li class="${b.id === user.uid ? 'mine' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(b.name)}</span><b>${b.pts}</b></li>`).join('')}</ol>
-        ${!tb.length && q.board.length > 1 && mineIn(q.board) === q.board.length - 1 && q.board[0].pts !== q.board[q.board.length - 1].pts ? '<p class="sip">🍻 Last place: finish your drink!</p>' : ''}</div>`;
+</div>`;
     }
     if (!q.q) return `<div class="card center"><div class="big">🎃</div><h2>Quiz coming up</h2><p class="hint">The questions will appear here when the host starts the quiz.${me.team ? `<br>You're on <b>${esc(me.team)}</b>.` : ''}</p></div>`;
     const key = `${q.round}_${q.i}`, mine = me.answers ? me.answers[key] : undefined;
@@ -261,7 +261,7 @@ async function main() {
     if (q.revealed) {
       const res = q.results && q.results[key] && q.results[key][user.uid];
       foot = res ? `<p class="sip" style="color:var(--green)">✅ Correct! +${res.pts} pts (${(res.ms / 1000).toFixed(1)}s)</p>`
-        : `<p class="sip" style="color:var(--pink)">🍺 ${mine === undefined ? 'Too slow!' : 'Wrong!'} Take a sip!</p>`;
+        : `<p class="sip" style="color:var(--pink)">${mine === undefined ? '⏰ Too slow!' : '❌ Wrong!'}</p>`;
       if (q.fastest && q.fastest.key === key && q.fastest.name) foot += `<p class="hint center">⚡ Fastest: <b>${esc(q.fastest.name)}</b> (${(q.fastest.ms / 1000).toFixed(1)}s)</p>`;
     } else foot = `<p class="hint center mt">${mine === undefined ? 'Quick! The faster you answer, the more points you get.' : 'Answer locked in. You can change it until the answer is revealed, but your time restarts.'}</p>`;
     const myRow = q.board ? q.board.find(b => b.id === user.uid) : null;

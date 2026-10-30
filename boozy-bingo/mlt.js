@@ -20,12 +20,12 @@ window.startBoozyMlt = () => {
       'spoil the ending of a film', 'win an argument with a lamp post', 'go skydiving', 'burn water while cooking', 'adopt every stray animal they meet'
     ] },
     party: { name: 'Party night', emoji: '🪩', list: [
-      'start dancing on a table', 'be the last one still standing tonight', 'take the most selfies tonight', 'order a round of shots',
+      'start dancing on a table', 'be the last one still standing tonight', 'take the most selfies tonight', 'organise a group photo',
       'grab the karaoke mic without being asked', 'text their ex tonight', 'leave without saying goodbye', 'lose a shoe tonight',
-      'make friends with the bouncer', 'spill a drink on someone', 'start a conga line', 'take over the music without asking',
-      'spend the whole party in the kitchen', 'eat a kebab at 4am', 'fall asleep first', 'say "just one more drink" five times',
+      'make friends with the bouncer', 'spill something on themselves', 'start a conga line', 'take over the music without asking',
+      'spend the whole party in the kitchen', 'eat a kebab at 4am', 'fall asleep first', 'say "just one more song" five times',
       'give a speech nobody asked for', 'dance like nobody is watching (everyone is)', 'post an embarrassing story tonight',
-      'know everyone\'s name by the end of the night', 'flirt with the bartender', 'be first on the dance floor', 'start a sing-along',
+      'know everyone\'s name by the end of the night', 'end up chatting to the DJ all night', 'be first on the dance floor', 'start a sing-along',
       'forget where they parked', 'organise the next party'
     ] },
     work: { name: 'Work & study', emoji: '💼', list: [
@@ -74,7 +74,7 @@ window.startBoozyMlt = () => {
     host.innerHTML = `<div class="grid2">
       <div class="card">
         <h2>🙋 Who's most likely to…</h2>
-        <p class="hint">A prompt appears on the TV. With phones, everyone votes for a player and the most-voted person drinks. Without phones, count down together and everyone points at someone.</p>
+        <p class="hint">A prompt appears on the TV. With phones, everyone votes for a player and the most-voted person wins the round. Without phones, count down together and everyone points at someone.</p>
         <label>Prompt packs</label>
         <div class="row">${Object.entries(PACKS).map(([id, p]) => `<label class="chip"><input type="checkbox" data-mpack="${id}" ${M.packs.includes(id) ? 'checked' : ''}> ${p.emoji} ${p.name} <small>(${p.list.length})</small></label>`).join('')}</div>
         <div class="fields">
@@ -187,7 +187,7 @@ window.startBoozyMlt = () => {
       if (++n < steps.length) setTimeout(go, 800);
       else setTimeout(() => {
         M.deck.pointed = true; save();
-        el.insertAdjacentHTML('afterend', '<p class="qsip">🍺 Whoever gets the most fingers pointed at them drinks!</p>');
+        el.insertAdjacentHTML('afterend', '<p class="qsip">👑 Whoever gets the most fingers pointed at them wins the round!</p>');
         $('#mlNext').disabled = false;
         $('#mlNext').textContent = M.deck.i === M.deck.list.length - 1 ? 'Finish 🏆' : 'Next ▶';
       }, 400);
@@ -217,13 +217,13 @@ window.startBoozyMlt = () => {
     d.revealed = true; save(); renderStage();
   }
   function resultsHtml(results) {
-    if (!results.length) return '<p class="qsip">Nobody voted. Everybody drinks! 🍻</p>';
+    if (!results.length) return '<p class="qsip">Nobody voted this time!</p>';
     const top = results[0].votes, max = top || 1;
     const winners = results.filter(r => r.votes === top).map(r => esc(r.name));
     return `<div class="mlbars">${results.map(r => `<div class="mlbar${r.votes === top ? ' win' : ''}">
         <span class="mln">${r.votes === top ? '👑 ' : ''}${esc(r.name)}</span>
         <span class="mlt"><i style="width:${Math.round(100 * r.votes / max)}%"></i></span><b>${r.votes}</b></div>`).join('')}</div>
-      <p class="qsip">🍺 ${winners.join(' & ')} ${winners.length > 1 ? 'drink' : 'drinks'}!</p>`;
+      <p class="qsip">🙋 It's ${winners.join(' & ')}!</p>`;
   }
   function advance() {
     const d = M.deck;
@@ -240,7 +240,7 @@ window.startBoozyMlt = () => {
       <div class="qtop"><span class="pill ok">Game over</span><span></span><button class="btn" id="mlExit">Menu</button></div>
       <h2 class="qq">🏆 Hall of fame</h2>
       ${h.length ? `<ol class="qboard">${h.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(r.name)}</span><b>${r.n}×</b></li>`).join('')}</ol>
-        <p class="qsip">${esc(h[0].name)} is the most likely to… everything! 🍻</p>`
+        <p class="qsip">${esc(h[0].name)} is the most likely to… everything! 🏆</p>`
         : '<p class="hint" style="text-align:center">Played the pointing version, so there are no scores to show. Hope everyone had fun!</p>'}
       <div class="qnav"><button class="btn" id="mlBack">◀ Back</button><button class="btn primary" id="mlAgain">Play again</button></div>
     </div>`;

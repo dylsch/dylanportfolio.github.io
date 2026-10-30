@@ -19,7 +19,7 @@ window.startBoozyLetters = () => {
       'A household chore', 'Something you plug in', 'A shop', 'A body part'
     ] },
     food: { name: 'Food & drink', emoji: '🍕', list: [
-      'A fruit', 'A vegetable', 'A cocktail or mixed drink', 'A pizza topping', 'A dessert', 'A snack', 'A breakfast food',
+      'A fruit', 'A vegetable', 'A hot drink', 'A pizza topping', 'A dessert', 'A snack', 'A breakfast food',
       'A cheese', 'A spice or herb', 'Something you grill', 'A sandwich filling', 'A sweet or chocolate bar', 'A soft drink',
       'A dish from another country', 'Something at a buffet'
     ] },
@@ -36,8 +36,8 @@ window.startBoozyLetters = () => {
       'A sea creature', 'A type of weather', 'Something that grows', 'A pet\'s name', 'A herb you can grow'
     ] },
     party: { name: 'Party', emoji: '🪩', list: [
-      'A reason to celebrate', 'Something you bring to a party', 'A dance move', 'A party game', 'Something said after too many drinks',
-      'A karaoke song', 'A chat-up line word', 'Something you lose on a night out', 'A word to describe a hangover', 'A drinking toast'
+      'A reason to celebrate', 'Something you bring to a party', 'A dance move', 'A party game', 'Something you shout at a concert',
+      'A karaoke song', 'A chat-up line word', 'Something you lose on a night out', 'A word to describe Monday morning', 'A party theme'
     ] },
     seasonal: { name: 'Seasonal', emoji: '🎃', list: [
       'A Halloween costume', 'Something scary', 'A Christmas present', 'Something on a Christmas tree', 'A Christmas song or film',
@@ -112,7 +112,7 @@ window.startBoozyLetters = () => {
     host.innerHTML = `<div class="grid2">
       <div class="card">
         <h2>🔤 Letter Rush</h2>
-        <p class="hint">Each round, the TV picks a random letter and a category, like <i>a fruit starting with B</i>. Answer before time runs out. A unique answer scores 10, one somebody else also gave scores 5, and no answer or a wrong letter costs a sip.</p>
+        <p class="hint">Each round, the TV picks a random letter and a category, like <i>a fruit starting with B</i>. Answer before time runs out. A unique answer scores 10, one somebody else also gave scores 5, and no answer or a wrong letter scores nothing.</p>
         <label>Category packs</label>
         <div class="row">${Object.entries(PACKS).map(([id, p]) => `<label class="chip"><input type="checkbox" data-lpack="${id}" ${M.packs.includes(id) ? 'checked' : ''}> ${p.emoji} ${p.name} <small>(${p.list.length})</small></label>`).join('')}</div>
         <div class="fields">
@@ -185,7 +185,7 @@ window.startBoozyLetters = () => {
       <p class="mlwho">starting with</p>
       <div class="lrletter" id="lrLetter">${r.rolled ? item.letter : '?'}</div>
       ${r.revealed && r.results ? resultsHtml(scored(r.results, item.letter))
-        : r.revealed ? '<p class="qsip">⏰ Time\'s up! Anyone who didn\'t get an answer in drinks 🍺</p>'
+        : r.revealed ? '<p class="qsip">⏰ Time\'s up!</p>'
         : voting ? '<p class="qlive" id="lrCount"></p>' : ''}
       <div class="qnav">
         <button class="btn" id="lrSkip">Skip</button>
@@ -245,12 +245,12 @@ window.startBoozyLetters = () => {
   }
   function resultsHtml(rows) {
     const label = { unique: '+10', shared: '+5 · copycat', wrong: 'wrong letter', rejected: 'rejected', blank: 'no answer' };
-    const sippers = rows.filter(x => x.pts === 0 || x.status === 'shared').map(x => esc(x.name));
+    const stars = rows.filter(x => x.status === 'unique').map(x => esc(x.name));
     return `<div class="lrgrid">${rows.sort((a, b) => b.pts - a.pts).map(x => `
         <button class="lrans ${x.status}" data-rej="${esc(x.id)}" ${x.answer ? 'title="Tap to reject or accept this answer"' : 'disabled'}>
           <span class="who">${esc(x.name)}</span><b>${x.answer ? esc(x.answer) : '—'}</b><span class="pts">${label[x.status]}</span></button>`).join('')}</div>
       <p class="hint" style="text-align:center">Tap an answer that doesn't fit the category to reject it.</p>
-      ${sippers.length ? `<p class="qsip">🍺 ${sippers.join(', ')} ${sippers.length > 1 ? 'drink' : 'drinks'}!</p>` : '<p class="qsip">🎉 Everyone was unique! Nobody drinks… this time.</p>'}`;
+      ${stars.length ? `<p class="qsip">⭐ Unique: ${stars.join(', ')}</p>` : ''}`;
   }
   function advance() {
     const d = M.deck;
@@ -266,7 +266,6 @@ window.startBoozyLetters = () => {
       <div class="qtop"><span class="pill warn">🔤 After round ${d.i + 1} / ${d.list.length}</span><span></span><button class="btn" id="lrExit">Menu</button></div>
       <h2 class="qq">📊 Leaderboard</h2>
       <ol class="qboard">${b.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(r.name)}</span><b>${r.pts}</b></li>`).join('')}</ol>
-      ${b.length > 1 && b[0].pts !== b[b.length - 1].pts ? `<p class="qsip">🍺 ${esc(b[b.length - 1].name)}: you're last, take a sip!</p>` : ''}
       <div class="qnav"><button class="btn" id="lrBack">◀ Back</button><button class="btn primary" id="lrNext">Next round ▶</button></div>
     </div>`;
     $('#lrExit').onclick = renderSetup;
@@ -281,8 +280,7 @@ window.startBoozyLetters = () => {
     host.innerHTML = `<div class="qstage">
       <div class="qtop"><span class="pill ok">Game over</span><span></span><button class="btn" id="lrExit">Menu</button></div>
       <h2 class="qq">🏆 Final scores</h2>
-      ${b.length ? `<ol class="qboard">${b.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(r.name)}</span><b>${r.pts}</b></li>`).join('')}</ol>
-        ${b.length > 1 && b[0].pts !== b[b.length - 1].pts ? `<p class="qsip">🍻 ${esc(b[b.length - 1].name)}: last place, finish your drink!</p>` : ''}`
+      ${b.length ? `<ol class="qboard">${b.map((r, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(r.name)}</span><b>${r.pts}</b></li>`).join('')}</ol>`
         : '<p class="hint" style="text-align:center">Played without phones, so there are no scores. Hope everyone had fun!</p>'}
       <div class="qnav"><button class="btn" id="lrBack">◀ Back</button><button class="btn primary" id="lrAgain">Play again</button></div>
     </div>`;

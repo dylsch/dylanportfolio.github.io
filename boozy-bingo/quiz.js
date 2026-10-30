@@ -106,7 +106,7 @@ window.startBoozyQuiz = () => {
   Object.entries(window.BOOZY_QUIZ_PACKS || {}).forEach(([id, p]) => {
     THEMES[id] = { key: 'boozyBingo.quiz.' + id, name: p.name, title: `${p.emoji} ${p.name} quiz`, emoji: p.emoji, teams: p.teams, ink: p.ink, blurb: p.blurb, bank: p.qs.map(toQ) };
   });
-  THEMES.mixed = { key: 'boozyBingo.quiz.mixed', name: 'Mixed bag', title: '🎲 Mixed bag quiz', emoji: '🎲', teams: 'Team Shaken\nTeam Stirred', ink: '#6a1b9a',
+  THEMES.mixed = { key: 'boozyBingo.quiz.mixed', name: 'Mixed bag', title: '🎲 Mixed bag quiz', emoji: '🎲', teams: 'Team Brains\nTeam Lucky', ink: '#6a1b9a',
     blurb: 'a random mix from every pack', bank: Object.values(THEMES).flatMap(t => t.bank) };
   const PACK_KEY = 'boozyBingo.quizPack';
   let T = THEMES[(() => { try { return localStorage.getItem(PACK_KEY); } catch { return null; } })()] || THEMES.halloween;
@@ -153,7 +153,7 @@ window.startBoozyQuiz = () => {
     <div class="grid2 mt">
       <div class="card">
         <h2>${T.title}</h2>
-        <p class="hint">Put this on a TV or laptop everyone can see. Players write their answers on printed sheets, or shout them out. Reveal the answer, give points, and anyone who got it wrong takes a sip.</p>
+        <p class="hint">Put this on a TV or laptop everyone can see. Players answer on their phones, write on printed sheets, or shout their answers out. Reveal the answer and give points.</p>
         <div class="fields">
           <div><label for="qzCount">Questions</label><input type="number" id="qzCount" min="1" max="${total}" value="${Q.count}"></div>
           <div><label for="qzTimer">Timer (seconds, 0 = off)</label><input type="number" id="qzTimer" min="0" max="300" value="${Q.timer}"></div>
@@ -241,7 +241,6 @@ window.startBoozyQuiz = () => {
       <div class="qopts">${item.opts.map((o, k) => `<div class="qopt${r.revealed ? (k === item.a ? ' correct' : ' dim') : ''}"><b>${LETTERS[k]}</b><span>${esc(o)}</span></div>`).join('')}</div>
       ${r.revealed ? `<div class="qreveal">
         ${item.fact ? `<p>💡 ${esc(item.fact)}</p>` : ''}
-        <p class="qsip">🍺 Got it wrong? Take a sip!</p>
         ${phones() ? '<div id="qzLiveScores"></div>' : r.players.length ? `<div class="hint">Who got it right? Tap to give them a point:</div>
           <div class="row qwho">${r.players.map((p, k) => `<button class="btn${right.includes(k) ? ' primary' : ''}" data-right="${k}">${right.includes(k) ? '✓ ' : ''}${esc(p)}</button>`).join('')}</div>` : ''}
       </div>` : ''}
@@ -316,7 +315,7 @@ window.startBoozyQuiz = () => {
       <div class="qtop"><span class="pill ok">Quiz complete</span><span></span><button class="btn" id="qzExit">Menu</button></div>
       <h2 class="qq">🏆 Final scores</h2>
       ${phones() ? '<div id="qzLiveBoard"></div>' : scores.length ? `<ol class="qboard">${scores.map(s => `<li class="${s.pts === top ? 'win' : ''}"><span>${s.pts === top ? '👑 ' : ''}${esc(s.name)}</span><b>${s.pts} / ${r.qs.length}</b></li>`).join('')}</ol>
-        ${scores.length > 1 && top !== bottom ? `<p class="qsip">🍻 ${scores.filter(s => s.pts === bottom).map(s => esc(s.name)).join(' & ')}: last place finishes their drink!</p>` : ''}`
+`
         : '<p class="hint">No players were added, so there are no scores. Hope you had fun!</p>'}
       <div class="qnav"><button class="btn" id="qzReview">◀ Back to last question</button><button class="btn primary" id="qzAgain">Play a new quiz</button></div>
     </div>`;
@@ -336,7 +335,7 @@ window.startBoozyQuiz = () => {
     const sheet = name => `<div class="qsheet" style="--ink:${T.ink}"><h1>${T.title}</h1>
       <p class="qname">Name / team: <span>${esc(name || '')}</span></p>
       <ol>${r.qs.map(() => `<li>${[...LETTERS].map(l => `<i>${l}</i>`).join('')}</li>`).join('')}</ol>
-      <p class="qfoot">Circle one letter per question · Wrong answer = sip 🍺 · Please drink responsibly</p></div>`;
+      <p class="qfoot">Circle one letter per question · Good luck!</p></div>`;
     doPrint((names.length ? names : ['']).map(sheet).join(''));
   }
   function printKey() {
@@ -363,7 +362,7 @@ window.startBoozyQuiz = () => {
         <span class="row"><button class="btn" id="qzFull" title="Fullscreen">⛶</button><button class="btn" id="qzExit">Menu</button></span></div>
       <h2 class="qq">📊 Leaderboard</h2>
       ${phones() ? '<div id="qzLiveBoard"></div>' : `<ol class="qboard">${scores.map((s, i) => `<li class="${i === 0 ? 'win' : ''}"><span>${i === 0 ? '👑 ' : ''}${esc(s.name)}</span><b>${s.pts}</b></li>`).join('')}</ol>
-        ${scores.length > 1 && scores[0].pts !== scores[scores.length - 1].pts ? `<p class="qsip">🍺 ${esc(scores[scores.length - 1].name)}: you're last, take a sip!</p>` : ''}`}
+`}
       <div class="qnav"><button class="btn" id="qzBack">◀ Back</button><button class="btn primary" id="qzNext">Next question ▶</button></div>
     </div>`;
     $('#qzExit').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); renderSetup(); };

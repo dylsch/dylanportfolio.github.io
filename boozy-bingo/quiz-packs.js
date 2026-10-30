@@ -228,7 +228,7 @@ window.BOOZY_QUIZ_PACKS = {
   },
 
   food: {
-    name: 'Food & drink', emoji: '🍸', ink: '#ad1457', teams: 'Team Spritz\nTeam Mojito',
+    name: 'Food & drink', emoji: '🍸', ink: '#ad1457', teams: 'Team Pasta\nTeam Pizza',
     blurb: 'cocktails, world food and kitchen trivia',
     qs: [
       ["Which spirit is the base of a Margarita?", "Tequila", "Vodka", "Rum", "Gin", ""],

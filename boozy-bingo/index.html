@@ -527,7 +527,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     </div>
   </section>
 
-  <p class="hint" style="text-align:center;margin-top:40px">🍻 Please drink responsibly. Water and soft drinks count as drinks too.</p>
+  <p class="hint" id="drinkNote" style="text-align:center;margin-top:40px">🍻 Please drink responsibly. Water and soft drinks count as drinks too.</p>
 </div>
 
 <div id="printArea"></div>
@@ -748,7 +748,7 @@ Kanye West - Gold Digger`
     { id: 'quiz', emoji: '🧠', name: 'Quiz Night', tab: 'quiz', tags: ['📱 Phones', '👥 Teams', '🖨️ Print'],
       desc: '14 quiz packs from Halloween to Malta, with teams and speed points on phones.' },
     { id: 'mlt', emoji: '🙋', name: "Who's Most Likely To", tab: 'mlt', tags: ['📱 Phones', '👉 No phones needed'],
-      desc: 'Everyone votes for who fits the prompt best. Most votes drinks.' },
+      desc: 'Everyone votes for who fits the prompt best. Most votes wins the round.' },
     { id: 'letters', emoji: '🔤', name: 'Letter Rush', tab: 'letters', tags: ['📱 Phones', '⏱ Timer', '👉 No phones needed'],
       desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' },
     { id: 'access', emoji: '🔒', name: 'Access', tab: 'access', admin: true, tags: ['Only you see this'],
@@ -772,6 +772,7 @@ Kanye West - Gold Digger`
     // The access tab is admin-only: gate.js unhides it, so keep it out of this toggle.
     $$('#tabs button:not(#accessTabBtn)').forEach(b => { b.hidden = !inGroup(b, m); });
     try { sessionStorage.setItem('boozyBingo.game', m); } catch {}
+    $('#drinkNote').hidden = m !== 'bingo'; // only Boozy Bingo involves drinking
   }
   const openGame = id => { showMode(id); showTab(store.get('boozyBingo.tab.' + id, gameOf(id).tab)); };
   $('#gameGrid').addEventListener('click', e => { const t = e.target.closest('[data-game]'); if (t) openGame(t.dataset.game); });
