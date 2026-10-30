@@ -1089,9 +1089,10 @@ Kanye West - Gold Digger`
 </script>
 <script src="firebase-config.js"></script>
 <script>
-// The Google login switch lives in firebase-config.js. With it off, the app opens straight away
-// (this also works when index.html is opened directly from disk, where module scripts can't load).
-if (window.BOOZY_LOGIN_ENABLED) {
+// The Google login switch lives in firebase-config.js. It is skipped when running on your own
+// computer (opened from disk or via the launchers on 127.0.0.1), which nobody else can reach.
+const isLocal = location.protocol === 'file:' || ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+if (window.BOOZY_LOGIN_ENABLED && !isLocal) {
   const s = document.createElement('script'); s.type = 'module'; s.src = 'gate.js'; document.body.appendChild(s);
 } else {
   document.getElementById('gate').hidden = true;

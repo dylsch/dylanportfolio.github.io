@@ -1,12 +1,7 @@
 // Boozy Bingo access gate: Google sign-in via Firebase Auth, with an approve-list and
 // access requests stored in Firestore (enforced by firestore.rules).
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {
-  getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+// Firebase is only downloaded once the config check passes.
+const FIREBASE = 'https://www.gstatic.com/firebasejs/10.14.1/';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -22,10 +17,19 @@ if (!configured) {
   box.innerHTML = `<div class="big">🔧</div><h2>Setup needed</h2>
     <p class="hint">The login gate isn't configured yet. Fill in <code>firebase-config.js</code> and publish <code>firestore.rules</code>. Step-by-step instructions are in <code>SETUP.md</code>.</p>`;
 } else {
-  run();
+  run().catch(e => {
+    box.innerHTML = `<div class="big">📡</div><h2>Couldn't reach Google</h2>
+      <p class="hint">The login service didn't load (${esc(e.message || e)}). Check your internet connection and refresh.</p>`;
+  });
 }
 
-function run() {
+async function run() {
+  const [{ initializeApp }, {
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged
+  }, {
+    getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp
+  }] = await Promise.all(['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(f => import(FIREBASE + f)));
+
   const app = initializeApp(cfg);
   const auth = getAuth(app);
   const db = getFirestore(app);
