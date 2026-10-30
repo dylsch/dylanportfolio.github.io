@@ -45,11 +45,13 @@ async function run() {
   function gate(html) {
     if (started) return;
     $('#app').hidden = true; $('#gate').hidden = false; box.innerHTML = html; }
+  let signedInEmail = '';
   function gateError(err) {
     // With the published rules, everyone may read their own access status, so a permission error
     // here means the Firestore rules from SETUP.md aren't live yet.
     if (err && err.code === 'permission-denied') {
       gate(`<div class="big">🔐</div><h2>Database not set up yet</h2>
+        ${signedInEmail ? `<p class="hint">Signed in as <b>${esc(signedInEmail)}</b></p>` : ''}
         <p class="hint">Firestore refused the request, which means the Boozy Bingo rules aren't published yet. In the Firebase console go to <b>Firestore Database → Rules</b>, paste the rules, press <b>Publish</b>, wait a minute and refresh.</p>
         <div class="row mt"><button class="btn primary" onclick="location.reload()">Refresh</button>${signOutBtn}</div>`);
       return;
@@ -184,6 +186,7 @@ async function run() {
   let authSeq = 0;
   onAuthStateChanged(auth, async user => {
     const seq = ++authSeq;
+    signedInEmail = user ? user.email || '' : '';
     stopListening();
     // Signing out (or losing access) while the app is open: reload so no app state lingers on screen.
     if (started) { location.reload(); return; }
