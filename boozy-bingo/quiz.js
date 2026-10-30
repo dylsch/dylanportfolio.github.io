@@ -72,7 +72,7 @@ window.startBoozyQuiz = () => {
     const pool = [...customQuestions(), ...shuffle(BANK)];
     const picked = shuffle(pool.slice(0, Math.max(customQuestions().length, Math.min(Q.count, pool.length))));
     Q.round = {
-      i: 0, revealed: false, done: false, started: false, players: players(), right: {},
+      id: Date.now().toString(36), i: 0, revealed: false, done: false, started: false, players: players(), right: {},
       qs: picked.map(x => { const opts = shuffle([x.a, ...x.wrong]); return { q: x.q, opts, a: opts.indexOf(x.a), fact: x.fact }; })
     };
     save();
@@ -168,12 +168,15 @@ window.startBoozyQuiz = () => {
         ${r.players.length ? `<div class="hint">Who got it right? Tap to give them a point:</div>
           <div class="row qwho">${r.players.map((p, k) => `<button class="btn${right.includes(k) ? ' primary' : ''}" data-right="${k}">${right.includes(k) ? '✓ ' : ''}${esc(p)}</button>`).join('')}</div>` : ''}
       </div>` : ''}
+      <div class="qlive" id="qzLive"></div>
       <div class="qnav">
         <button class="btn" id="qzBack" ${r.i === 0 && !r.revealed ? 'disabled' : ''}>◀ Back</button>
         <button class="btn primary" id="qzNext">${!r.revealed ? 'Reveal answer' : r.i === r.qs.length - 1 ? 'Final scores 🏆' : 'Next question ▶'}</button>
       </div>
     </div>`;
     if (!r.revealed && !keepTimer) startTimer(); else if (r.revealed) stopTimer();
+    if (!keepTimer) announce();
+    window.dispatchEvent(new Event('boozy:quiz-rendered'));
     $('#qzExit').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); renderSetup(); };
     $('#qzFull').onclick = () => {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -187,6 +190,15 @@ window.startBoozyQuiz = () => {
       save(); renderStage(true);
     });
   }
+  // live.js mirrors the current question to players' phones (the answer only once it's revealed).
+  function announce(done) {
+    const r = Q.round, item = r.qs[r.i];
+    if (!r.id) { r.id = Date.now().toString(36); save(); }
+    window.dispatchEvent(new CustomEvent('boozy:quiz', { detail: {
+      round: r.id, i: r.i, total: r.qs.length, q: item.q, opts: item.opts, revealed: r.revealed, answer: item.a, done: !!done
+    } }));
+  }
+
   function next() {
     const r = Q.round;
     if (!r.revealed) r.revealed = true;
@@ -204,6 +216,7 @@ window.startBoozyQuiz = () => {
   function renderResults() {
     stopTimer();
     const r = Q.round;
+    announce(true);
     const scores = r.players.map((name, k) => ({ name, pts: Object.values(r.right).filter(l => l.includes(k)).length }))
       .sort((a, b) => b.pts - a.pts);
     const top = scores.length ? scores[0].pts : 0;

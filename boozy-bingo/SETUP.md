@@ -12,6 +12,8 @@ Boozy Bingo only opens for your Google account. Anyone else who signs in can sen
 1. **Build → Authentication → Get started → Sign-in method → Google → Enable**, then save.
 2. **Authentication → Settings → Authorized domains → Add domain**, and add your GitHub Pages domain, e.g. `dylsch.github.io`.
 
+3. For live games (players join from their phones by QR code): **Sign-in method → Add new provider → Anonymous → Enable**. Players don't need a Google account. They only get access to the games you share with them.
+
 ## 3. Create the database and lock it down
 1. **Build → Firestore Database → Create database**. Pick a European location (e.g. `eur3` or `europe-west1`) and start in **production mode**.
 2. Open the **Rules** tab and replace everything with the contents of `firestore.rules`.
@@ -23,5 +25,7 @@ Commit `firebase-config.js` and push. Open the page, sign in with your account, 
 ## Good to know
 - The Firebase config values are meant to be public. What keeps people out is the Firestore rules: only your verified email can approve people, and anyone else can only file one request for themselves.
 - GitHub Pages serves the page code publicly, so the gate stops anyone else from using *your* app. A technical person could still copy the code and run their own version. They would never get your Spotify account or your data.
+- Live games: open the **📱 Live game** tab (online, signed in) and show the QR code. A player can only see the game whose code they scanned, only edit their own name and answers, and can't change their card or award themselves a bingo. Approved friends can host their own live games too.
+- If you update the rules later, re-publish the whole `firestore.rules` file in the console (with your email filled in).
 - You only see new requests while the app is open. Email alerts would need Firebase's paid plan (Cloud Functions) or a service like EmailJS.
 - Remove someone from **Allowed people** and their open app locks immediately.

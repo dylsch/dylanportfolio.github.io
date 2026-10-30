@@ -25,9 +25,8 @@ if (!configured) {
 async function run() {
   const [{ initializeApp }, {
     getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged
-  }, {
-    getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp, getDocs, query, limit
-  }] = await Promise.all(['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(f => import(FIREBASE + f)));
+  }, fs] = await Promise.all(['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(f => import(FIREBASE + f)));
+  const { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp, getDocs, query, limit } = fs;
 
   const app = initializeApp(cfg);
   const auth = getAuth(app);
@@ -112,6 +111,7 @@ async function run() {
       <span>${esc(user.displayName || user.email)}</span><button id="signOutBtn">Sign out</button>`;
     $('#signOutBtn').onclick = () => signOut(auth);
     window.startBoozyApp();
+    if (window.startBoozyLive) window.startBoozyLive({ db, fs, user });
     if (isAdmin) startAdmin();
   }
 
@@ -190,7 +190,7 @@ async function run() {
     stopListening();
     // Signing out (or losing access) while the app is open: reload so no app state lingers on screen.
     if (started) { location.reload(); return; }
-    if (!user) { showSignIn(); return; }
+    if (!user || user.isAnonymous) { showSignIn(); return; }
     // The owner's email lives only in the Firestore rules (not in this public code): only the owner
     // is allowed to list access requests, so a successful read means "this is the owner".
     gate('<p class="hint">Checking the guest list…</p>');

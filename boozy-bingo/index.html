@@ -203,6 +203,17 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 .req .who .e { color: var(--muted); font-size: 13px; word-break: break-all; }
 .req .msg { margin-top: 4px; font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; }
 .req .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.qrbox { background: #fff; border-radius: 12px; padding: 10px; width: min(300px, 100%); margin: 6px auto 10px; }
+.qrbox svg, .qrbig svg { display: block; width: 100%; height: auto; }
+.qroverlay { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 16px; cursor: pointer; }
+.qroverlay h2 { font-size: clamp(24px, 4vw, 44px); margin: 14px 0 0; }
+.qroverlay p { font-size: 18px; margin: 0; }
+.qrbig { background: #fff; border-radius: 18px; padding: 16px; width: min(70vh, 90vw); }
+.lvplayers { margin-top: 12px; }
+.lvp { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.lvp b { flex: 1; }
+.lvkick { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; }
+.qlive { text-align: center; color: var(--accent); font-weight: 600; min-height: 1.4em; }
 .badge { display: inline-block; background: var(--pink); color: #fff; border-radius: 99px; font-size: 11px; padding: 0 7px; margin-left: 6px; }
 
 @media print {
@@ -269,6 +280,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="spotify"><span class="n">3</span>Spotify playlist</button>
     <button data-tab="host"><span class="n">4</span>Host the game</button>
     <button data-tab="quiz">🎃 Quiz</button>
+    <button data-tab="live" id="liveTabBtn">📱 Live game</button>
     <button data-tab="access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
@@ -421,6 +433,14 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   <!-- HALLOWEEN QUIZ (rendered by quiz.js) -->
   <section class="tab" id="tab-quiz"></section>
 
+  <!-- LIVE GAME (rendered by live.js when signed in online) -->
+  <section class="tab" id="tab-live">
+    <div class="card">
+      <h2>📱 Play on phones</h2>
+      <p class="hint">Live games let friends scan a QR code and play bingo and the quiz on their phones. They run through the online version of Boozy Bingo, so open it from your website and sign in with Google to start one.</p>
+    </div>
+  </section>
+
   <!-- ACCESS (admin only) -->
   <section class="tab" id="tab-access">
     <div class="grid2">
@@ -450,6 +470,8 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <div class="toast" id="toast"></div>
 
 <script src="quiz.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="live.js"></script>
 <script>
 // The app only starts once the access gate (module script below) confirms the signed-in user is allowed.
 window.startBoozyApp = () => {
@@ -1001,8 +1023,10 @@ Kanye West - Gold Digger`
     const has = state.played.includes(k);
     if (on && !has) state.played.push(k);
     if (!on && has) state.played = state.played.filter(x => x !== k);
-    save(); renderHost();
+    save(); renderHost(); announcePlayed();
   }
+  // live.js listens for this to keep players' phones in sync.
+  const announcePlayed = () => window.dispatchEvent(new CustomEvent('boozy:played', { detail: state.played }));
   function renderHost() {
     const f = norm($('#hostFilter').value || '');
     const ps = playedSet();
@@ -1018,7 +1042,7 @@ Kanye West - Gold Digger`
     const k = b.dataset.k; markPlayed(k, !state.played.includes(k));
   });
   $('#hostFilter').addEventListener('input', renderHost);
-  $('#resetPlayed').onclick = () => { if (confirm('Clear all played songs and start a new round?')) { state.played = []; save(); renderHost(); $('#checkResult').innerHTML = ''; } };
+  $('#resetPlayed').onclick = () => { if (confirm('Clear all played songs and start a new round?')) { state.played = []; save(); renderHost(); announcePlayed(); $('#checkResult').innerHTML = ''; } };
   $('#drinkBtn').onclick = () => toast('🎲 ' + DARES[Math.floor(Math.random() * DARES.length)], 5000);
 
   let autoTimer = null, lastTrackId = null;
@@ -1072,6 +1096,9 @@ Kanye West - Gold Digger`
       <p class="hint">${marked.filter(Boolean).length}/${g * g} squares heard · ${done} complete line${done === 1 ? '' : 's'}${full ? ' · FULL HOUSE' : ''}</p>
       ${cardHTML(card, n - 1, ps)}`;
   };
+
+  // Read-only view of the game setup for live.js.
+  window.boozyApp = { getState: () => state, songKey, cellsNeeded };
 
   // ---------- Init ----------
   (async () => {
