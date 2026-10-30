@@ -35,6 +35,7 @@ window.startBoozyLive = ctx => {
     gameId = randomId();
     await fs.setDoc(gameRef(), {
       hostUid: user.uid, title: st.title, open: true, mode: 'lobby', createdAt: fs.serverTimestamp(),
+      theme: window.BoozyThemes ? window.BoozyThemes.current() : 'party',
       bingo: {
         grid: st.grid, free: !!(st.free && st.grid % 2), need,
         songs: st.songs.length >= need ? st.songs.map(s => ({ k: app.songKey(s), t: s.title, a: s.artist })) : [],

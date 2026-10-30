@@ -58,6 +58,7 @@ async function main() {
 
   fs.onSnapshot(gameRef, snap => {
     game = snap.exists() ? snap.data() : null;
+    if (game && game.theme && window.BoozyThemes) window.BoozyThemes.apply(game.theme); // follow the host's theme
     if (game && game.mode !== lastMode) {
       if (game.mode === 'quiz' || game.mode === 'bingo') tab = game.mode;
       lastMode = game.mode;
