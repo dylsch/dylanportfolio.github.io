@@ -97,12 +97,19 @@ window.startBoozyQuiz = () => {
   ].map(toQ);
 
   const THEMES = {
-    halloween: { key: 'boozyBingo.quiz', title: '🎃 Halloween quiz', emoji: '🎃', teams: 'Team Pumpkin\nTeam Ghoul', ink: '#d35400',
+    halloween: { key: 'boozyBingo.quiz', name: 'Halloween', title: '🎃 Halloween quiz', emoji: '🎃', teams: 'Team Pumpkin\nTeam Ghoul', ink: '#d35400',
       blurb: 'films, folklore, spooky plants and cocktails', bank: HALLOWEEN },
-    christmas: { key: 'boozyBingo.quiz.christmas', title: '🎄 Christmas quiz', emoji: '🎄', teams: 'Team Rudolph\nTeam Elf', ink: '#c0392b',
+    christmas: { key: 'boozyBingo.quiz.christmas', name: 'Christmas', title: '🎄 Christmas quiz', emoji: '🎄', teams: 'Team Rudolph\nTeam Elf', ink: '#c0392b',
       blurb: 'films, songs, Maltese traditions, festive plants and drinks', bank: CHRISTMAS }
   };
-  let T = THEMES.halloween;
+  // Extra packs live in quiz-packs.js.
+  Object.entries(window.BOOZY_QUIZ_PACKS || {}).forEach(([id, p]) => {
+    THEMES[id] = { key: 'boozyBingo.quiz.' + id, name: p.name, title: `${p.emoji} ${p.name} quiz`, emoji: p.emoji, teams: p.teams, ink: p.ink, blurb: p.blurb, bank: p.qs.map(toQ) };
+  });
+  THEMES.mixed = { key: 'boozyBingo.quiz.mixed', name: 'Mixed bag', title: '🎲 Mixed bag quiz', emoji: '🎲', teams: 'Team Shaken\nTeam Stirred', ink: '#6a1b9a',
+    blurb: 'a random mix from every pack', bank: Object.values(THEMES).flatMap(t => t.bank) };
+  const PACK_KEY = 'boozyBingo.quizPack';
+  let T = THEMES[(() => { try { return localStorage.getItem(PACK_KEY); } catch { return null; } })()] || THEMES.halloween;
   const BANK = () => T.bank;
 
   const fresh = () => Object.assign({ count: 15, timer: 20, autoReveal: true, players: T.teams, custom: '', round: null }, load());
@@ -138,7 +145,12 @@ window.startBoozyQuiz = () => {
   function renderSetup() {
     stopTimer();
     const r = Q.round, total = BANK().length + customQuestions().length;
-    host.innerHTML = `<div class="grid2">
+    host.innerHTML = `<div class="card packcard">
+      <h2>Choose a quiz pack</h2>
+      <div class="packs">${Object.entries(THEMES).map(([id, t]) => `<button class="pack${t === T ? ' active' : ''}" data-pack="${id}">
+        <span class="pe">${t.emoji}</span><b>${esc(t.name)}</b><small>${t.bank.length} questions</small></button>`).join('')}</div>
+    </div>
+    <div class="grid2 mt">
       <div class="card">
         <h2>${T.title}</h2>
         <p class="hint">Put this on a TV or laptop everyone can see. Players write their answers on printed sheets, or shout them out. Reveal the answer, give points, and anyone who got it wrong takes a sip.</p>
@@ -178,6 +190,7 @@ window.startBoozyQuiz = () => {
       window.dispatchEvent(new Event('boozy:quiz-setup'));
     };
     host.querySelectorAll('input, textarea').forEach(el => el.addEventListener('change', read));
+    host.querySelectorAll('[data-pack]').forEach(b => b.onclick = () => { read(); setTheme(b.dataset.pack, true); });
     $('#qzNew').onclick = () => {
       read();
       if (Q.round && Q.round.started && !Q.round.done && !confirm('Throw away the quiz in progress and start a new one?')) return;
@@ -215,7 +228,7 @@ window.startBoozyQuiz = () => {
     const r = Q.round, item = r.qs[r.i], right = r.right[r.i] || [];
     host.innerHTML = `<div class="qstage" id="qzStage">
       <div class="qtop">
-        <span class="pill warn">Question ${r.i + 1} / ${r.qs.length}</span>
+        <span class="pill warn">${T.emoji} Question ${r.i + 1} / ${r.qs.length}</span>
         <span class="qtime" id="qzTime"></span>
         <span class="row">
           <button class="btn" id="qzFull" title="Fullscreen">⛶</button>
@@ -340,12 +353,13 @@ window.startBoozyQuiz = () => {
     else renderSetup();
   }
   // Switch between quiz themes; each keeps its own settings, teams and progress.
-  function setTheme(name) {
+  function setTheme(name, toSetup) {
     if (!THEMES[name] || THEMES[name] === T) return;
     if (document.fullscreenElement) document.exitFullscreen();
     stopTimer();
     T = THEMES[name]; Q = fresh();
-    show();
+    try { localStorage.setItem(PACK_KEY, name); } catch {}
+    toSetup ? renderSetup() : show();
   }
   window.boozyQuiz = { teams: players, setTheme };
   show();

@@ -50,7 +50,13 @@ header.top {
 .modes { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px; margin: 4px 0 14px; max-width: 100%; }
 .modes button { background: none; border: 0; color: var(--muted); font: 600 16px Fredoka, sans-serif; padding: 9px 18px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
 .modes button.active { background: var(--accent); color: var(--accent-ink); }
-@media (max-width: 560px) { .modes { display: grid; grid-template-columns: 1fr 1fr 1fr; } .modes button { padding: 9px 4px; font-size: 13px; white-space: normal; } }
+@media (max-width: 420px) { .modes { display: grid; grid-template-columns: 1fr 1fr; } .modes button { padding: 9px 6px; font-size: 15px; } }
+.packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.pack { background: var(--bg); border: 2px solid var(--line); border-radius: 14px; color: var(--text); padding: 12px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 14px Inter, sans-serif; }
+.pack:hover { border-color: var(--accent); }
+.pack.active { border-color: var(--accent); background: rgba(255,178,56,.14); }
+.pack .pe { font-size: 28px; }
+.pack small { color: var(--muted); font-size: 12px; }
 nav.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
 nav.tabs button {
   background: none; border: 0; color: var(--muted); font: 600 15px Fredoka, sans-serif;
@@ -285,8 +291,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 
   <div class="modes" id="modes" role="tablist" aria-label="Game">
     <button data-mode="bingo" class="active">🎵 Boozy Bingo</button>
-    <button data-mode="halloween">🎃 Halloween Quiz</button>
-    <button data-mode="christmas">🎄 Christmas Quiz</button>
+    <button data-mode="quiz">🧠 Quiz Night</button>
   </div>
 
   <!-- data-group says which game's menu a tab belongs to; the phones and access tabs appear in both. -->
@@ -296,9 +301,9 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="spotify" data-group="bingo"><span class="n">3</span>Spotify playlist</button>
     <button data-tab="host" data-group="bingo"><span class="n">4</span>Host the game</button>
     <button data-tab="live" data-group="bingo"><span class="n">5</span>📱 Play on phones</button>
-    <button data-tab="live" data-group="halloween christmas" hidden><span class="n">1</span>📱 Let players join</button>
-    <button data-tab="quiz" data-group="halloween christmas" hidden><span class="n">2</span>Run the quiz</button>
-    <button data-tab="access" data-group="bingo halloween christmas" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
+    <button data-tab="live" data-group="quiz" hidden><span class="n">1</span>📱 Let players join</button>
+    <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🧠 Run the quiz</button>
+    <button data-tab="access" data-group="bingo quiz" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -486,6 +491,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <div id="printArea"></div>
 <div class="toast" id="toast"></div>
 
+<script src="quiz-packs.js"></script>
 <script src="quiz.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="live.js"></script>
@@ -691,14 +697,14 @@ Kanye West - Gold Digger`
   // Two menus (bingo and quiz), each remembering its own last tab.
   const inGroup = (b, mode) => b.dataset.group.split(' ').includes(mode);
   let mode = store.get('boozyBingo.mode', 'bingo');
-  if (!['bingo', 'halloween', 'christmas'].includes(mode)) mode = 'bingo';
+  if (mode === 'halloween' || mode === 'christmas') { window.boozyQuiz.setTheme(mode); mode = 'quiz'; }
+  if (!['bingo', 'quiz'].includes(mode)) mode = 'bingo';
   function showMode(m) {
     mode = m;
     $$('#modes button').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
     // The access tab is admin-only: gate.js unhides it, so keep it out of this toggle.
     $$('#tabs button:not(#accessTabBtn)').forEach(b => { b.hidden = !inGroup(b, m); });
     store.set('boozyBingo.mode', m);
-    if (m !== 'bingo') window.boozyQuiz.setTheme(m);
   }
   function showTab(name) {
     const btns = $$('#tabs button').filter(b => b.dataset.tab === name);
