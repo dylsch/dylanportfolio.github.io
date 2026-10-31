@@ -262,7 +262,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 .tmp { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; }
 .tmp select { width: auto; max-width: 55%; padding: 5px 8px; font-size: 13px; }
 .qlive { text-align: center; color: var(--accent); font-weight: 600; min-height: 1.4em; }
-.badge { display: inline-block; background: var(--pink); color: #fff; border-radius: 99px; font-size: 11px; padding: 0 7px; margin-left: 6px; }
+.badge { display: inline-block; background: var(--pink); color: var(--bg); font-weight: 700; border-radius: 99px; font-size: 11px; padding: 0 7px; margin-left: 6px; }
 
 @media print {
   @page { size: A4 portrait; margin: 8mm; }
@@ -320,6 +320,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div>
     <div class="head-right">
       <div class="spotify-status"><span class="dot" id="spDot"></span><span id="spStatusText">Spotify not connected</span></div>
+      <button class="btn admin-only" id="accessBtn" title="Approve who can use Boozy Bingo">🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
       <div class="userchip" id="userChip"></div>
     </div>
   </header>
@@ -353,7 +354,6 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🧠 Run the quiz</button>
     <button data-tab="mlt" data-group="mlt" hidden><span class="n">2</span>🙋 Play</button>
     <button data-tab="letters" data-group="letters" hidden><span class="n">2</span>🔤 Play</button>
-    <button data-tab="access" data-group="bingo quiz mlt letters access" id="accessTabBtn" hidden>🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
   </nav>
 
   <!-- SONGS -->
@@ -764,11 +764,11 @@ Kanye West - Gold Digger`
     { id: 'mlt', emoji: '🙋', name: "Who's Most Likely To", tab: 'mlt', tags: ['📱 Phones', '👉 No phones needed'],
       desc: 'Everyone votes for who fits the prompt best. Most votes wins the round.' },
     { id: 'letters', emoji: '🔤', name: 'Letter Rush', tab: 'letters', tags: ['📱 Phones', '⏱ Timer', '👉 No phones needed'],
-      desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' },
-    { id: 'access', emoji: '🔒', name: 'Access', tab: 'access', admin: true, tags: ['Only you see this'],
-      desc: 'Approve or remove the people who can use Boozy Bingo.' }
+      desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' }
   ];
-  $('#gameGrid').innerHTML = GAMES.map(g => `<button class="gametile${g.admin ? ' admin-only' : ''}" data-game="${g.id}">
+  // Pages that aren't games: opened from the top bar, never shown as tiles.
+  const PAGES = [{ id: 'access', emoji: '🔒', name: 'Access', tab: 'access' }];
+  $('#gameGrid').innerHTML = GAMES.map(g => `<button class="gametile" data-game="${g.id}">
     <span class="ge">${g.emoji}</span><b>${esc(g.name)}</b><p>${esc(g.desc)}</p>
     <span class="tags">${g.tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</span></button>`).join('');
 
@@ -788,23 +788,25 @@ Kanye West - Gold Digger`
   renderThemes();
 
   const inGroup = (b, mode) => b.dataset.group.split(' ').includes(mode);
-  const gameOf = id => GAMES.find(g => g.id === id);
+  const gameOf = id => GAMES.find(g => g.id === id) || PAGES.find(p => p.id === id);
   // Open on the welcome screen, but a reload (or coming back from Spotify login) returns to the game you were in.
   let mode = (() => { try { return sessionStorage.getItem('boozyBingo.game'); } catch { return null; } })();
-  if (!gameOf(mode)) mode = 'home';
+  if (!gameOf(mode) || mode === 'access') mode = 'home';
   function showMode(m) {
     mode = m;
     const home = m === 'home';
-    $('#home').hidden = !home; $('#gameBar').hidden = home; $('#tabs').hidden = home;
+    $('#home').hidden = !home; $('#gameBar').hidden = home;
+    $('#tabs').hidden = home || !GAMES.some(g => g.id === m); // pages like Access have no tabs
     if (home) $$('section.tab').forEach(s => s.classList.remove('active'));
     else $('#gameTitle').textContent = `${gameOf(m).emoji} ${gameOf(m).name}`;
-    // The access tab is admin-only: gate.js unhides it, so keep it out of this toggle.
-    $$('#tabs button:not(#accessTabBtn)').forEach(b => { b.hidden = !inGroup(b, m); });
+    $$('#tabs button').forEach(b => { b.hidden = !inGroup(b, m); });
+    $('#accessBtn').classList.toggle('primary', m === 'access');
     try { sessionStorage.setItem('boozyBingo.game', m); } catch {}
     $('#drinkNote').hidden = m !== 'bingo'; // only Boozy Bingo involves drinking
   }
   const openGame = id => { showMode(id); showTab(store.get('boozyBingo.tab.' + id, gameOf(id).tab)); };
   $('#gameGrid').addEventListener('click', e => { const t = e.target.closest('[data-game]'); if (t) openGame(t.dataset.game); });
+  $('#accessBtn').onclick = () => { showMode('access'); showTab('access'); };
   $('#homeBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); showMode('home'); };
   function showTab(name) {
     const btns = $$('#tabs button').filter(b => b.dataset.tab === name);

@@ -116,8 +116,7 @@ async function run() {
   }
 
   function startAdmin() {
-    $('#accessTabBtn').hidden = false;
-    document.body.classList.add('is-admin');
+    document.body.classList.add('is-admin'); // reveals the 🔒 Access button in the top bar
     let requests = [], allowed = [];
     const avatar = p => p.photo ? `<img src="${esc(p.photo)}" alt="" referrerpolicy="no-referrer">` : '<div class="av"></div>';
     const when = ts => ts && ts.toDate ? ts.toDate().toLocaleString() : '';

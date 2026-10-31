@@ -1,6 +1,6 @@
 # Boozy Bingo: login setup
 
-Boozy Bingo only opens for your Google account. Anyone else who signs in can send you an access request, which you approve or decline from the **🔒 Access** tab. All of this runs on Firebase's free plan, so no credit card is needed.
+Boozy Bingo only opens for your Google account. Anyone else who signs in can send you an access request, which you approve or decline from the **🔒 Access** button in the top bar. All of this runs on Firebase's free plan, so no credit card is needed.
 
 ## 1. Create a Firebase project
 1. Go to <https://console.firebase.google.com> and click **Create a project**. Any name works, e.g. `boozy-bingo`. You can turn Google Analytics off.
@@ -20,7 +20,7 @@ Boozy Bingo only opens for your Google account. Anyone else who signs in can sen
 3. Change `YOUR_EMAIL@gmail.com` in the rules to your Gmail address, then click **Publish**. That account becomes the owner.
 
 ## 4. Push and test
-Commit `firebase-config.js` and push. Open the page, sign in with your account, and the app opens. To try the request flow, sign in from a private window with a different Google account and send a request. It appears in your **Access** tab within a second, with a counter badge.
+Commit `firebase-config.js` and push. Open the page, sign in with your account, and the app opens. To try the request flow, sign in from a private window with a different Google account and send a request. It appears under the **🔒 Access** button within a second, with a counter badge.
 
 ## Good to know
 - The Firebase config values are meant to be public. What keeps people out is the Firestore rules: only your verified email can approve people, and anyone else can only file one request for themselves.
