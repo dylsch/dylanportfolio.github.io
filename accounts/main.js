@@ -66,8 +66,7 @@ async function run() {
       if (e.code === 'permission-denied') {
         gate(`<h1>🔒 Private</h1><p>Signed in as <b>${esc(user.email)}</b>.</p>
           <p>This app belongs to someone else, so this account can't open it.</p>
-          <p class="hint">If this is your account: the rules from <code>accounts/firestore.rules</code> haven't been published in Firebase yet –
-            see <code>accounts/SETUP.md</code>.</p>${otherAccount}`);
+          ${otherAccount}`);
       } else {
         gate(`<h1>⚠️ Something went wrong</h1><p>${esc(e.message || e)}</p>${otherAccount}`);
       }
