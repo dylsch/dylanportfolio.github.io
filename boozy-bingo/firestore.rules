@@ -1,6 +1,7 @@
 rules_version = '2';
 
 // Paste into Firebase console → Firestore Database → Rules, then Publish.
+// Shared by Party Games (/boozy-bingo) and Freelance Accounts (/accounts).
 // Replace YOUR_EMAIL@gmail.com with the Google account that owns the app (keep your real email out of this public repo).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -69,6 +70,14 @@ service cloud.firestore {
     // stats/{uid}/games/{id}: each host's private game history.
     match /stats/{uid}/games/{gameId} {
       allow read, write: if isSelf(uid) && isHost();
+    }
+
+    // ledger/{uid}/...: Freelance Accounts (the /accounts page). Only the owner, and only their own ledger.
+    match /ledger/{uid} {
+      allow read, write: if isAdmin() && isSelf(uid);
+      match /{document=**} {
+        allow read, write: if isAdmin() && isSelf(uid);
+      }
     }
 
     match /{document=**} {
