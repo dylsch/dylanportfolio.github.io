@@ -4,7 +4,7 @@
 
   // Every theme is dark so it reads well on a TV in a dim room. Keys map onto the CSS custom properties.
   const THEMES = [
-    { id: 'party', name: 'Party', emoji: '🍹', decor: [],
+    { id: 'party', name: 'Party', emoji: '🎉', decor: [],
       c: { bg: '#1d1226', panel: '#2a1b36', 'panel-2': '#352245', line: '#4a3360', text: '#f6eefb', muted: '#bba7c9', accent: '#ffb238', 'accent-ink': '#2a1600', pink: '#ff5d8f' } },
     { id: 'halloween', name: 'Halloween', emoji: '🎃', decor: ['🦇', '🎃', '👻', '🕸️'],
       c: { bg: '#140d0a', panel: '#22150f', 'panel-2': '#2e1c13', line: '#4a2c1b', text: '#fbefe6', muted: '#c9a990', accent: '#ff7a1a', 'accent-ink': '#1f0d00', pink: '#c084fc' } },

@@ -34,7 +34,7 @@ window.startBoozyLive = ctx => {
     const st = app.getState(), need = app.cellsNeeded();
     gameId = randomId();
     await fs.setDoc(gameRef(), {
-      hostUid: user.uid, title: st.title, open: true, mode: 'lobby', createdAt: fs.serverTimestamp(),
+      hostUid: user.uid, title: 'Party Games', open: true, mode: 'lobby', createdAt: fs.serverTimestamp(),
       theme: window.BoozyThemes ? window.BoozyThemes.current() : 'party',
       bingo: {
         grid: st.grid, free: !!(st.free && st.grid % 2), need,
@@ -87,7 +87,7 @@ window.startBoozyLive = ctx => {
     const lines = L.filter(l => l.every(i => marked[i])).length, full = marked.every(Boolean);
     const ok = lines > 0;
     if (ok && window.boozyStats) window.boozyStats.record({ id: `bingo_${gameId}_${p.id}_${ms(p.bingoAt)}`, game: 'bingo',
-      title: game.title || 'Boozy Bingo', players: [{ name: p.name, win: true }], winner: p.name, extras: { lines, full } });
+      title: 'Boozy Bingo', players: [{ name: p.name, win: true }], winner: p.name, extras: { lines, full } });
     fs.updateDoc(fs.doc(db, 'games', gameId, 'players', p.id), { bingoResult: { claim: ms(p.bingoAt), ok, lines, full } })
       .catch(e => toast('⚠️ ' + e.message));
     const msg = ok ? `🎉 ${p.name} has a valid BINGO! (${full ? 'FULL HOUSE' : lines + ' line' + (lines > 1 ? 's' : '')})` : `🙅 ${p.name} called a false bingo. Finish your drink!`;
@@ -269,7 +269,7 @@ window.startBoozyLive = ctx => {
     const round = game.quiz && game.quiz.round;
     host.innerHTML = `<div class="grid2">
       <div class="card" style="text-align:center">
-        <h2>Scan to join 🍹</h2>
+        <h2>Scan to join 🎉</h2>
         <div class="qrbox">${qrSvg(url, 8)}</div>
         <p class="hint" style="word-break:break-all">${esc(url)}</p>
         <div class="row" style="justify-content:center">
@@ -319,7 +319,7 @@ window.startBoozyLive = ctx => {
     const ov = document.createElement('div');
     ov.className = 'qroverlay';
     ov.innerHTML = `<div class="qrbig">${qrSvg(joinUrl(), 12)}</div>
-      <h2>Scan to play ${esc(game.title || 'Boozy Bingo')} 🍹</h2>
+      <h2>Scan to play ${esc(game.title || 'Party Games')} 🎉</h2>
       <p>Point your phone camera at the code</p><p class="hint">Click anywhere to close</p>`;
     ov.onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); ov.remove(); };
     document.body.appendChild(ov);

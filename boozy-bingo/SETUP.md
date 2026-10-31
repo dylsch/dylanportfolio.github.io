@@ -1,9 +1,9 @@
-# Boozy Bingo: login setup
+# Party Games: login setup
 
-Boozy Bingo only opens for your Google account. Anyone else who signs in can send you an access request, which you approve or decline from the **🔒 Access** button in the top bar. All of this runs on Firebase's free plan, so no credit card is needed.
+Party Games only opens for your Google account. Anyone else who signs in can send you an access request, which you approve or decline from the **🔒 Access** button in the top bar. All of this runs on Firebase's free plan, so no credit card is needed.
 
 ## 1. Create a Firebase project
-1. Go to <https://console.firebase.google.com> and click **Create a project**. Any name works, e.g. `boozy-bingo`. You can turn Google Analytics off.
+1. Go to <https://console.firebase.google.com> and click **Create a project**. Any name works, e.g. `party-games`. You can turn Google Analytics off.
 2. On the project home page, click the **Web** icon (`</>`) to add a web app. Give it a nickname. Skip Hosting.
 3. Firebase shows a `firebaseConfig` block. Copy `apiKey`, `authDomain`, `projectId` and `appId` into `firebase-config.js`.
 4. Leave `BOOZY_LOGIN_ENABLED` as `true`. Your email does **not** go in this file: it only goes in the Firestore rules (step 3), which stay private in the Firebase console.

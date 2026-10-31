@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Boozy Bingo</title>
-<meta name="description" content="Music bingo for parties: build a song list, generate printable bingo cards and create the Spotify playlist in one go.">
+<title>Party Games</title>
+<meta name="description" content="Party Games: music bingo, quiz night, Who's Most Likely To and Letter Rush, with phones joining by QR code.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -340,17 +340,17 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <script src="themes.js"></script>
 <script>BoozyThemes.apply(BoozyThemes.current(), BoozyThemes.decorOn());</script>
 <div class="wrap" id="gate">
-  <header class="top"><div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div></header>
+  <header class="top"><div class="brand"><div class="logo">🎉</div><h1>Party <span>Games</span></h1></div></header>
   <div class="card gatebox" id="gateBox"><p class="hint">Loading…</p></div>
 </div>
 
 <div class="wrap" id="app" hidden>
   <header class="top">
-    <div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div>
+    <div class="brand"><div class="logo">🎉</div><h1>Party <span>Games</span></h1></div>
     <div class="head-right">
       <div class="spotify-status"><span class="dot" id="spDot"></span><span id="spStatusText">Spotify not connected</span></div>
       <button class="btn" id="statsBtn" title="Game history and player stats">📊 Stats</button>
-      <button class="btn admin-only" id="accessBtn" title="Approve who can use Boozy Bingo">🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
+      <button class="btn admin-only" id="accessBtn" title="Approve who can use Party Games">🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
       <div class="userchip" id="userChip"></div>
     </div>
   </header>
@@ -358,7 +358,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   <!-- Welcome screen: one tile per game, built from GAMES in the script below. -->
   <div id="home" class="home" hidden>
     <div class="homehead">
-      <h2>What are we playing tonight? 🍹</h2>
+      <h2>What are we playing tonight? 🎉</h2>
       <button class="btn" id="themeBtn" aria-expanded="false" aria-controls="themePick"></button>
     </div>
     <div class="card themepick" id="themePick" hidden>
@@ -465,7 +465,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
           <p class="hint">Spotify needs your own (free) developer app so this page can make playlists on your account. This is a one-time, two-minute setup:</p>
           <ol class="steps hint">
             <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> and log in.</li>
-            <li>Click <b>Create app</b>. Use any name, e.g. "Boozy Bingo".</li>
+            <li>Click <b>Create app</b>. Use any name, e.g. "Party Games".</li>
             <li>Under <b>Redirect URIs</b>, add exactly:<br><code id="redirectUri"></code></li>
             <li>Tick <b>Web API</b>, save, then copy the <b>Client ID</b> into the box below.</li>
           </ol>
@@ -548,7 +548,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   <section class="tab" id="tab-live">
     <div class="card">
       <h2>📱 Play on phones</h2>
-      <p class="hint">Live games let friends scan a QR code and play bingo and the quiz on their phones. They run through the online version of Boozy Bingo, so open it from your website and sign in with Google to start one.</p>
+      <p class="hint">Live games let friends scan a QR code and play bingo and the quiz on their phones. They run through the online version of Party Games, so open it from your website and sign in with Google to start one.</p>
     </div>
   </section>
 
@@ -557,7 +557,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <div class="grid2">
       <div class="card">
         <h2>Access requests</h2>
-        <p class="hint">People who signed in with Google and asked to use Boozy Bingo.</p>
+        <p class="hint">People who signed in with Google and asked to use Party Games.</p>
         <div id="reqList"><p class="hint">No pending requests.</p></div>
       </div>
       <div>

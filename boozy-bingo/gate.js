@@ -51,7 +51,7 @@ async function run() {
     if (err && err.code === 'permission-denied') {
       gate(`<div class="big">🔐</div><h2>Database not set up yet</h2>
         ${signedInEmail ? `<p class="hint">Signed in as <b>${esc(signedInEmail)}</b></p>` : ''}
-        <p class="hint">Firestore refused the request, which means the Boozy Bingo rules aren't published yet. In the Firebase console go to <b>Firestore Database → Rules</b>, paste the rules, press <b>Publish</b>, wait a minute and refresh.</p>
+        <p class="hint">Firestore refused the request, which means the Party Games rules aren't published yet. In the Firebase console go to <b>Firestore Database → Rules</b>, paste the rules, press <b>Publish</b>, wait a minute and refresh.</p>
         <div class="row mt"><button class="btn primary" onclick="location.reload()">Refresh</button>${signOutBtn}</div>`);
       return;
     }
@@ -59,8 +59,8 @@ async function run() {
   }
 
   function showSignIn() {
-    gate(`<div class="big">🍹</div><h2>Private party</h2>
-      <p class="hint">Boozy Bingo is invite-only. Sign in with Google. If you're not on the list yet, you can ask the host for access.</p>
+    gate(`<div class="big">🎉</div><h2>Private party</h2>
+      <p class="hint">Party Games is invite-only. Sign in with Google. If you're not on the list yet, you can ask the host for access.</p>
       <div class="row mt"><button class="gbtn" id="googleBtn">${GOOGLE_ICON} Sign in with Google</button></div>`);
     $('#googleBtn').onclick = async () => {
       try { await signInWithPopup(auth, provider); }

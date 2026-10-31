@@ -105,7 +105,7 @@ async function main() {
     if (joining) return;
     joining = true;
     if (!game.open) { joining = false; return screen('🔒', 'Joining is closed', 'The host has closed this game to new players.'); }
-    view.innerHTML = `<div class="card center"><div class="big">🍹</div><h2>Join ${esc(game.title || 'the game')}</h2>
+    view.innerHTML = `<div class="card center"><div class="big">🎉</div><h2>Join ${esc(game.title || 'the party')}</h2>
       <p class="hint">What should we call you?</p>
       <input type="text" id="name" maxlength="30" autocomplete="nickname" placeholder="Your name" value="${esc(store.get('boozyBingo.name', ''))}">
       <button class="btn primary mt" id="join">Let's play</button></div>`;
