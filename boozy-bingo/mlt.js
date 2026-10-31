@@ -279,6 +279,11 @@ window.startBoozyMlt = () => {
   function renderEnd() {
     stop();
     const h = hall();
+    if (!M.deck.recorded && window.boozyStats) {
+      window.boozyStats.record({ id: `mlt_${M.deck.id}`, game: 'mlt', title: "Who's Most Likely To", rounds: M.deck.list.length,
+        players: h.map(r => ({ name: r.name, picks: r.n })), winner: h.length ? h.filter(r => r.n === h[0].n).map(r => r.name).join(' & ') : '' });
+      M.deck.recorded = true; save();
+    }
     host.innerHTML = `<div class="qstage">
       <div class="qtop"><span class="pill ok">Game over</span><span></span><button class="btn" id="mlExit">Menu</button></div>
       <h2 class="qq">🏆 Hall of fame</h2>

@@ -277,6 +277,16 @@ window.startBoozyLetters = () => {
   function renderEnd() {
     stop();
     const b = board();
+    if (!M.deck.recorded && window.boozyStats) {
+      const uniques = {};
+      Object.entries(M.deck.rounds).forEach(([i, r]) => r.results && scored(r.results, M.deck.list[i].letter)
+        .forEach(x => { if (x.status === 'unique') uniques[x.id] = (uniques[x.id] || 0) + 1; }));
+      const top = b.length ? b[0].pts : 0;
+      window.boozyStats.record({ id: `letters_${M.deck.id}`, game: 'letters', title: 'Letter Rush', rounds: M.deck.list.length,
+        players: b.map(p => ({ name: p.name, pts: p.pts, uniques: uniques[p.id] || 0, win: p.pts === top && top > 0 })),
+        winner: top > 0 ? b.filter(p => p.pts === top).map(p => p.name).join(' & ') : '' });
+      M.deck.recorded = true; save();
+    }
     host.innerHTML = `<div class="qstage">
       <div class="qtop"><span class="pill ok">Game over</span><span></span><button class="btn" id="lrExit">Menu</button></div>
       <h2 class="qq">🏆 Final scores</h2>

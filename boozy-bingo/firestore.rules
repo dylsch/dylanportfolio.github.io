@@ -66,6 +66,11 @@ service cloud.firestore {
       }
     }
 
+    // stats/{uid}/games/{id}: each host's private game history.
+    match /stats/{uid}/games/{gameId} {
+      allow read, write: if isSelf(uid) && isHost();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

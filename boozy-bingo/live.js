@@ -86,6 +86,8 @@ window.startBoozyLive = ctx => {
     L.push([...Array(g)].map((_, i) => i * g + i), [...Array(g)].map((_, i) => i * g + (g - 1 - i)));
     const lines = L.filter(l => l.every(i => marked[i])).length, full = marked.every(Boolean);
     const ok = lines > 0;
+    if (ok && window.boozyStats) window.boozyStats.record({ id: `bingo_${gameId}_${p.id}_${ms(p.bingoAt)}`, game: 'bingo',
+      title: game.title || 'Boozy Bingo', players: [{ name: p.name, win: true }], winner: p.name, extras: { lines, full } });
     fs.updateDoc(fs.doc(db, 'games', gameId, 'players', p.id), { bingoResult: { claim: ms(p.bingoAt), ok, lines, full } })
       .catch(e => toast('⚠️ ' + e.message));
     const msg = ok ? `🎉 ${p.name} has a valid BINGO! (${full ? 'FULL HOUSE' : lines + ' line' + (lines > 1 ? 's' : '')})` : `🙅 ${p.name} called a false bingo. Finish your drink!`;
@@ -230,6 +232,15 @@ window.startBoozyLive = ctx => {
   window.boozyLive = {
     playerCount: () => (game ? players.length : 0),
     active: () => !!game,
+    // Final quiz standings and the fastest right answer of a round, for the stats page.
+    quizSummary: round => {
+      const res = quizResults(), b = boards(round, res);
+      let fastest = null;
+      Object.entries(res).filter(([k]) => k.startsWith(round + '_')).forEach(([, r]) => Object.entries(r).forEach(([id, x]) => {
+        if (!fastest || x.ms < fastest.ms) fastest = { name: (players.find(p => p.id === id) || {}).name || '?', ms: x.ms };
+      }));
+      return { board: b['quiz.board'], teamBoard: b['quiz.teamBoard'], fastest };
+    },
     players: () => (game ? players : []),
     update
   };

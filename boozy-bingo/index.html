@@ -83,6 +83,35 @@ body:not(.is-admin) .admin-only { display: none; }
 .lrans .who, .lrans .pts { color: var(--muted); font-size: 12px; }
 .lrans.unique { border-color: var(--green); } .lrans.unique .pts { color: var(--green); font-weight: 600; }
 .lrans.shared { border-color: var(--accent); } .lrans.shared .pts { color: var(--accent); font-weight: 600; }
+/* Stats page */
+.stbar { justify-content: space-between; margin-bottom: 14px; }
+.seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { background: none; border: 0; color: var(--muted); font: 600 14px Inter, sans-serif; padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+.seg button.active { background: var(--accent); color: var(--accent-ink); }
+.stiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.stile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stile .sl { color: var(--muted); font-size: 13px; }
+.stile .sv { font: 700 30px Fredoka, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stile .ss { color: var(--muted); font-size: 13px; }
+.sbars { display: grid; gap: 4px; position: relative; }
+.sbar { display: grid; grid-template-columns: minmax(120px, 42%) 1fr 2.5em; align-items: center; gap: 10px; padding: 6px 4px; border-radius: 8px; cursor: default; }
+.sbar:hover, .sbar:focus-visible { background: var(--panel-2); outline: none; }
+.sbar .sbl { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sbar .sbt { height: 12px; }
+.sbar .sbt i { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
+.sbar b { text-align: right; font-variant-numeric: tabular-nums; }
+.stip { position: absolute; left: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.35); z-index: 2; }
+.slist { margin: 0; padding-left: 22px; }
+.slist li { padding: 5px 0; } .slist li span { display: inline-block; min-width: 70%; }
+.stable { overflow-x: auto; }
+.stable table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.stable th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.stable td { padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.stable td:not(:first-child), .stable th:not(:first-child) { text-align: right; }
+.srecent { margin-top: 10px; }
+.srow { display: grid; grid-template-columns: 7.5em 1.6fr 1.2fr 6em 2em; gap: 10px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.srow .sd { color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .srow { grid-template-columns: 1fr auto; } .srow .sd, .srow > span:nth-child(4) { display: none; } }
 .lrans.wrong, .lrans.rejected, .lrans.blank { opacity: .6; } .lrans.rejected b, .lrans.wrong b { text-decoration: line-through; }
 .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
 .pack { background: var(--bg); border: 2px solid var(--line); border-radius: 14px; color: var(--text); padding: 12px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 14px Inter, sans-serif; }
@@ -320,6 +349,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <div class="brand"><div class="logo">🍹</div><h1>Boozy <span>Bingo</span></h1></div>
     <div class="head-right">
       <div class="spotify-status"><span class="dot" id="spDot"></span><span id="spStatusText">Spotify not connected</span></div>
+      <button class="btn" id="statsBtn" title="Game history and player stats">📊 Stats</button>
       <button class="btn admin-only" id="accessBtn" title="Approve who can use Boozy Bingo">🔒 Access<span class="badge" id="reqBadge" hidden></span></button>
       <div class="userchip" id="userChip"></div>
     </div>
@@ -511,6 +541,9 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   <!-- LETTER RUSH (rendered by letters.js) -->
   <section class="tab" id="tab-letters"></section>
 
+  <!-- STATS (rendered by stats.js) -->
+  <section class="tab" id="tab-stats"></section>
+
   <!-- LIVE GAME (rendered by live.js when signed in online) -->
   <section class="tab" id="tab-live">
     <div class="card">
@@ -551,6 +584,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <script src="quiz.js"></script>
 <script src="mlt.js"></script>
 <script src="letters.js"></script>
+<script src="stats.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="live.js"></script>
 <script>
@@ -560,6 +594,7 @@ window.startBoozyApp = () => {
   window.startBoozyQuiz();
   window.startBoozyMlt();
   window.startBoozyLetters();
+  window.startBoozyStats();
 
   // ---------- Storage ----------
   const KEY = 'boozyBingo.v1';
@@ -767,7 +802,7 @@ Kanye West - Gold Digger`
       desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' }
   ];
   // Pages that aren't games: opened from the top bar, never shown as tiles.
-  const PAGES = [{ id: 'access', emoji: '🔒', name: 'Access', tab: 'access' }];
+  const PAGES = [{ id: 'access', emoji: '🔒', name: 'Access', tab: 'access' }, { id: 'stats', emoji: '📊', name: 'Stats', tab: 'stats' }];
   $('#gameGrid').innerHTML = GAMES.map(g => `<button class="gametile" data-game="${g.id}">
     <span class="ge">${g.emoji}</span><b>${esc(g.name)}</b><p>${esc(g.desc)}</p>
     <span class="tags">${g.tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</span></button>`).join('');
@@ -791,7 +826,7 @@ Kanye West - Gold Digger`
   const gameOf = id => GAMES.find(g => g.id === id) || PAGES.find(p => p.id === id);
   // Open on the welcome screen, but a reload (or coming back from Spotify login) returns to the game you were in.
   let mode = (() => { try { return sessionStorage.getItem('boozyBingo.game'); } catch { return null; } })();
-  if (!gameOf(mode) || mode === 'access') mode = 'home';
+  if (!gameOf(mode) || mode === 'access' || mode === 'stats') mode = 'home';
   function showMode(m) {
     mode = m;
     const home = m === 'home';
@@ -801,12 +836,14 @@ Kanye West - Gold Digger`
     else $('#gameTitle').textContent = `${gameOf(m).emoji} ${gameOf(m).name}`;
     $$('#tabs button').forEach(b => { b.hidden = !inGroup(b, m); });
     $('#accessBtn').classList.toggle('primary', m === 'access');
+    $('#statsBtn').classList.toggle('primary', m === 'stats');
     try { sessionStorage.setItem('boozyBingo.game', m); } catch {}
     $('#drinkNote').hidden = m !== 'bingo'; // only Boozy Bingo involves drinking
   }
   const openGame = id => { showMode(id); showTab(store.get('boozyBingo.tab.' + id, gameOf(id).tab)); };
   $('#gameGrid').addEventListener('click', e => { const t = e.target.closest('[data-game]'); if (t) openGame(t.dataset.game); });
   $('#accessBtn').onclick = () => { showMode('access'); showTab('access'); };
+  $('#statsBtn').onclick = () => { showMode('stats'); showTab('stats'); };
   $('#homeBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); showMode('home'); };
   function showTab(name) {
     const btns = $$('#tabs button').filter(b => b.dataset.tab === name);
@@ -815,6 +852,7 @@ Kanye West - Gold Digger`
     $$('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
     if (name === 'host') renderHost();
     if (name === 'cards') renderCardStatus();
+    if (name === 'stats') window.boozyStats.render();
     store.set('boozyBingo.tab.' + mode, name);
   }
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
@@ -1232,6 +1270,8 @@ Kanye West - Gold Digger`
     const full = marked.every(Boolean);
     const mode = $('#checkMode').value;
     const win = mode === 'full' ? full : mode === 'two' ? done >= 2 : done >= 1;
+    if (win && state.cardsKey === cardsKey()) window.boozyStats.record({ id: `bingo_${state.code}_card${n}`, game: 'bingo', title: state.title,
+      players: [], winner: `Card #${n}`, extras: { mode } });
     out.innerHTML += `<p class="verdict ${win ? 'win' : 'no'}">${win ? '🎉 BINGO! Valid win' : '🙅 Not yet: false bingo, drink up!'}</p>
       <p class="hint">${marked.filter(Boolean).length}/${g * g} squares heard · ${done} complete line${done === 1 ? '' : 's'}${full ? ' · FULL HOUSE' : ''}</p>
       ${cardHTML(card, n - 1, ps)}`;

@@ -304,10 +304,34 @@ window.startBoozyQuiz = () => {
     save(); renderStage();
   }
 
+  // Save a finished quiz to the stats once.
+  function recordStats(r) {
+    if (r.recorded || !window.boozyStats) return;
+    const sum = window.boozyLive && window.boozyLive.playerCount() ? window.boozyLive.quizSummary(r.id) : null;
+    const entry = { id: `quiz_${T.key.replace(/\W/g, '_')}_${r.id}`, game: 'quiz', title: T.title, rounds: r.qs.length, players: [], teams: [], winner: '' };
+    const names = rows => rows.map(x => x.name).join(' & ');
+    if (sum && sum.board.length) {
+      const tb = sum.teamBoard, topT = tb.length ? tb[0].pts : 0, topP = sum.board[0].pts;
+      const winTeams = tb.filter(t => t.pts === topT && topT > 0).map(t => t.team);
+      entry.players = sum.board.map(p => ({ name: p.name, team: p.team || '', pts: p.pts,
+        win: tb.length ? winTeams.includes(p.team) : p.pts === topP && topP > 0 }));
+      entry.teams = tb.map(t => ({ name: t.team, pts: t.pts }));
+      entry.winner = tb.length ? winTeams.join(' & ') : names(sum.board.filter(p => p.pts === topP && topP > 0));
+      entry.extras = { fastest: sum.fastest || null };
+    } else if (r.players.length) {
+      const sc = manualScores(r);
+      entry.teams = sc.map(s => ({ name: s.name, pts: s.pts }));
+      entry.winner = sc[0].pts ? names(sc.filter(s => s.pts === sc[0].pts)) : '';
+    }
+    window.boozyStats.record(entry);
+    r.recorded = true; save();
+  }
+
   function renderResults() {
     stopTimer();
     const r = Q.round;
     announce(true);
+    recordStats(r);
     const scores = manualScores(r);
     const top = scores.length ? scores[0].pts : 0;
     const bottom = scores.length ? scores[scores.length - 1].pts : 0;
