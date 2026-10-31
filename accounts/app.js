@@ -1,4 +1,4 @@
-// Freelance Accounts (Malta): the pages. Runs entirely in the browser; `store` holds the data.
+// Accounts (Malta): the pages. Runs entirely in the browser; `store` holds the data.
 import * as malta from './malta.js';
 import * as L from './logic.js';
 import * as claude from './claude.js';
@@ -24,7 +24,7 @@ export function startApp(store, user, { signOut } = {}) {
   // ---------------------------------------------------------------- Shell
 
   document.getElementById('topbar').innerHTML = `
-    <a class="brand" href="#/">🇲🇹 Freelance Accounts</a>
+    <a class="brand" href="#/">🇲🇹 Accounts</a>
     <nav>${[['', 'Dashboard'], ['invoices', 'Invoices'], ['expenses', 'Expenses'], ['import', 'Import'],
       ['clients', 'Clients'], ['reports', 'Reports & tax'], ['settings', 'Settings']]
       .map(([p, t]) => `<a href="#/${p}" data-nav="${p}">${t}</a>`).join('')}</nav>
@@ -55,7 +55,7 @@ export function startApp(store, user, { signOut } = {}) {
     try { page = pageFor(parts, q); } catch (e) { page = { html: `<div class="flash error">${esc(e.message)}</div>` }; }
     live = !!page.live;
     const t = page.title || 'Accounts';
-    document.title = `${t} · ${S().trading_name || S().full_name || 'Freelance Accounts'}`;
+    document.title = `${t} · ${S().trading_name || S().full_name || 'Accounts'}`;
     main.innerHTML = flashes.map(([k, m]) => `<div class="flash ${k} no-print">${esc(m)}</div>`).join('') + page.html;
     flashes = [];
     main.querySelectorAll('[data-year]').forEach(sel => sel.onchange = () => {
@@ -249,7 +249,7 @@ export function startApp(store, user, { signOut } = {}) {
           let b;
           try {
             b = JSON.parse(await file.text());
-            if (b.app !== 'freelance-accounts-malta') throw new Error('This is not a Freelance Accounts backup file.');
+            if (b.app !== 'freelance-accounts-malta') throw new Error('This is not an Accounts backup file.');
           } catch (e) { flash(e.message, 'error'); render(); return; }
           const counts = ['clients', 'invoices', 'expenses'].map(k => `${Object.keys(b[k] || {}).length} ${k}`).join(', ');
           if (!confirm(`Restore ${counts} and your settings? Records with the same id are overwritten; nothing else is deleted.`)) { ev.target.value = ''; return; }

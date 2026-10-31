@@ -38,7 +38,7 @@ async function run() {
   box.addEventListener('click', e => { if (e.target.closest('[data-signout]')) signOut(auth); });
 
   function showSignIn() {
-    gate(`<h1>🇲🇹 Freelance Accounts</h1><p>Private – sign in with your Google account.</p>
+    gate(`<h1>🇲🇹 Accounts</h1><p>Private – sign in with your Google account.</p>
       <button class="btn google" id="googleBtn">${GOOGLE_ICON} Sign in with Google</button>`);
     $('#googleBtn').onclick = async () => {
       try { await signInWithPopup(auth, provider); }

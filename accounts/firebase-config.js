@@ -1,4 +1,4 @@
-// Firebase settings for Freelance Accounts. This is its own Firebase project, separate from
+// Firebase settings for Accounts. This is its own Firebase project, separate from
 // everything else on this site. See SETUP.md.
 //
 // These values are safe to publish: access is enforced by the Firestore rules (firestore.rules),

@@ -1,4 +1,4 @@
-# Freelance Accounts: setup
+# Accounts: setup
 
 The accounts page (`/accounts/`) has **its own Firebase project**. It shares nothing with anything else on this site:
 it has its own config (`firebase-config.js`), its own rules (`firestore.rules`), its own sign-in and its own database.
