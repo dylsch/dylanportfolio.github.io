@@ -2,6 +2,7 @@
 import * as malta from './malta.js';
 import * as L from './logic.js';
 import * as claude from './claude.js';
+import * as drive from './drive.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const eur = c => esc(L.eur(c));
@@ -11,7 +12,7 @@ const fmtDate = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-GB', 
 const qty = q => String(Number(q));
 const NO_RATE = ['exempt', 'reverse', 'outside', 'article11'];
 
-export function startApp(store, user, { signOut } = {}) {
+export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
   const data = store.data;
   const main = document.getElementById('main');
   let flashes = [];
@@ -113,10 +114,19 @@ export function startApp(store, user, { signOut } = {}) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  async function openFile(fileId) {
+  async function openFile(fileId, name = 'original') {
     const win = window.open('', '_blank');
     try {
       const blob = await store.getFile(fileId);
+      if (blob.type === claude.DOCX) {   // browsers can't show Word files: download it instead
+        if (win) win.close();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = /\.docx$/i.test(name) ? name : `${name}.docx`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       if (win) win.location.href = url; else location.href = url;
     } catch (e) {
@@ -580,6 +590,57 @@ export function startApp(store, user, { signOut } = {}) {
   const queue = [];
   const blobs = new Map();    // import id → uploaded file, so it isn't downloaded again
   const STALE_MS = 10 * 60 * 1000;
+  let driveStatus = '';       // progress message while files come in from Google Drive
+
+  // Store each file, record an import and queue it for Claude. items: [{ blob, name, type, drive_id? }]
+  async function addDocuments(items, autoAdd) {
+    const skipped = [];
+    let queued = 0;
+    for (const it of items) {
+      try {
+        const fileId = await store.putFile(it.blob, it.name);
+        const id = store.newId();
+        const stamp = new Date().toISOString();
+        await store.commit([{ set: ['imports', id, { filename: it.name, file_id: fileId, media_type: it.type, auto_add: autoAdd,
+          source: it.drive_id ? 'drive' : 'upload', drive_id: it.drive_id || null,
+          status: 'processing', problems: [], error: '', created_at: stamp, started_at: stamp }] }]);
+        blobs.set(id, it.blob);
+        queue.push(id); queued++;
+      } catch (e) { skipped.push(`${it.name} (${e.message})`); }
+    }
+    pump();
+    return { queued, skipped };
+  }
+
+  async function importFromDrive(autoAdd) {
+    let token;
+    try { token = await driveAccess.getToken(); } catch (e) { flash(e.message, 'error'); render(); return; }
+    if (!token) return;   // Google window closed
+    let picked;
+    try { picked = await drive.pickFiles(token, driveAccess); } catch (e) { flash(e.message, 'error'); render(); return; }
+    if (!picked.length) return;
+    const already = new Set(L.list(data.imports).filter(r => r.drive_id && r.status !== 'discarded').map(r => r.drive_id));
+    const skipped = [], items = [];
+    let n = 0;
+    for (const f of picked) {
+      n++;
+      if (already.has(f.id)) { skipped.push(`${f.name} (already imported)`); continue; }
+      if (f.size > claude.MAX_FILE_BYTES) { skipped.push(`${f.name} (over 20 MB)`); continue; }
+      driveStatus = `Getting ${n} of ${picked.length} from Google Drive…`; render();
+      try {
+        const file = await drive.downloadFile(token, f);
+        if (file.blob.size > claude.MAX_FILE_BYTES) { skipped.push(`${f.name} (over 20 MB)`); continue; }
+        items.push({ ...file, drive_id: f.id });
+      } catch (e) { skipped.push(`${f.name} (${e.message})`); }
+    }
+    driveStatus = items.length ? 'Saving…' : ''; render();
+    const res = await addDocuments(items, autoAdd);
+    driveStatus = '';
+    skipped.push(...res.skipped);
+    if (skipped.length) flash(`Skipped: ${skipped.join(', ')}.`, 'error');
+    if (res.queued) flash(`Claude is reading ${res.queued} document(s) from Google Drive. This page updates by itself.`);
+    render();
+  }
 
   function ownerDescription() {
     const s = S();
@@ -633,19 +694,26 @@ export function startApp(store, user, { signOut } = {}) {
       <h1>Import past invoices &amp; receipts</h1>
       <section class="card">${keyBox}</section>
       <form class="card upload" id="uploadForm">
-        <label class="drop"><input type="file" name="files" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" required>
-          <span>Choose PDFs or photos – your own invoices to clients, or bills and receipts from suppliers. You can select many at once.</span></label>
+        <label class="drop"><input type="file" name="files" multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif">
+          <span>Choose PDFs, Word documents (.docx) or photos – your own invoices to clients, or bills and receipts from suppliers. You can select many at once.</span></label>
         <label class="check"><input type="checkbox" name="auto_add" checked>
           Add straight to my accounts when everything checks out. Anything unclear, duplicated or not adding up waits for you to review.</label>
-        <button class="btn" ${apiKey ? '' : 'disabled'}>Upload and let Claude read them</button>
+        <div class="row-buttons">
+          <button class="btn" ${apiKey ? '' : 'disabled'}>Upload and let Claude read them</button>
+          ${driveAccess ? `<button type="button" class="btn secondary" id="driveBtn" ${apiKey && !driveStatus ? '' : 'disabled'}>
+            <svg viewBox="0 0 87.3 78" aria-hidden="true"><path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"/><path fill="#ea4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"/><path fill="#00832d" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg>
+            Choose from Google Drive</button>` : ''}
+        </div>
+        ${driveStatus ? `<p class="muted">${esc(driveStatus)}</p>` : ''}
         <p class="hint">Claude works out whether each document is an invoice you issued (added as an invoice, with the client
           created if new) or a purchase (added as an expense). Amounts are re-checked line by line before anything is saved.
+          From Google Drive you can pick PDFs, Word documents and Google Docs; the app can only read the files you pick.
           Files are sent to Anthropic for processing and the originals are kept in your private database.
           Keep this page open while documents are being read.</p>
       </form>
       ${rows.length ? `<table class="card"><tr><th>Document</th><th>Status</th><th>What Claude found</th><th></th></tr>
         ${rows.map(r => `<tr>
-          <td><button class="link" data-open="${esc(r.file_id)}">${esc(r.filename)}</button></td><td>${badge(r)}</td>
+          <td><button class="link" data-open="${esc(r.file_id)}" data-name="${esc(r.filename)}">${esc(r.filename)}</button>${r.source === 'drive' ? '<br><small class="muted">from Google Drive</small>' : ''}</td><td>${badge(r)}</td>
           <td>${r.doc ? `${r.doc.document_type === 'sales_invoice' ? 'Your invoice' : r.doc.document_type === 'purchase' ? 'Purchase' : 'Not an invoice'}
             ${esc(r.doc.number || '')} · ${esc(r.doc.counterparty?.name)} · ${esc(r.doc.issue_date)} · ${eur(Math.round(Number(r.doc.total_gross || 0) * 100))}
             ${r.status === 'review' ? `<ul class="problems">${(r.problems || []).map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}`
@@ -676,31 +744,24 @@ export function startApp(store, user, { signOut } = {}) {
           ev.preventDefault();
           const f = new FormData(ev.target);
           const files = f.getAll('files').filter(x => x && x.name);
-          const autoAdd = f.has('auto_add');
+          if (!files.length) { alert('Choose at least one file first.'); return; }
           const btn = ev.target.querySelector('button');
           btn.disabled = true; btn.textContent = 'Uploading…';
-          const skipped = [], queued = [];
+          const items = [], bad = [];
           for (const file of files) {
-            const ext = file.name.split('.').pop().toLowerCase();
-            const type = claude.MEDIA_TYPES[ext];
-            if (!type || file.size > claude.MAX_FILE_BYTES) { skipped.push(file.name); continue; }
-            try {
-              const blob = file.type === type ? file : new Blob([file], { type });
-              const fileId = await store.putFile(blob, file.name);
-              const id = store.newId();
-              const stamp = new Date().toISOString();
-              await store.commit([{ set: ['imports', id, { filename: file.name, file_id: fileId, media_type: type, auto_add: autoAdd,
-                status: 'processing', problems: [], error: '', created_at: stamp, started_at: stamp }] }]);
-              blobs.set(id, blob);
-              queued.push(id);
-            } catch (e) { skipped.push(`${file.name} (${e.message})`); }
+            const type = claude.MEDIA_TYPES[file.name.split('.').pop().toLowerCase()];
+            if (!type || file.size > claude.MAX_FILE_BYTES) { bad.push(file.name); continue; }
+            items.push({ blob: file.type === type ? file : new Blob([file], { type }), name: file.name, type });
           }
-          queue.push(...queued); pump();
-          if (skipped.length) flash(`Skipped: ${skipped.join(', ')}. Use PDF, PNG, JPG, WEBP or GIF files up to 20 MB.`, 'error');
-          if (queued.length) flash(`Claude is reading ${queued.length} document(s). This page updates by itself.`);
+          const { queued, skipped } = await addDocuments(items, f.has('auto_add'));
+          if (bad.length) flash(`Skipped: ${bad.join(', ')}. Use PDF, Word (.docx), PNG, JPG, WEBP or GIF files up to 20 MB.`, 'error');
+          if (skipped.length) flash(`Skipped: ${skipped.join(', ')}.`, 'error');
+          if (queued) flash(`Claude is reading ${queued} document(s). This page updates by itself.`);
           render();
         };
-        main.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openFile(b.dataset.open));
+        main.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openFile(b.dataset.open, b.dataset.name));
+        const driveBtn = document.getElementById('driveBtn');
+        if (driveBtn) driveBtn.onclick = () => importFromDrive(document.querySelector('#uploadForm [name=auto_add]').checked);
         main.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => {
           const r = data.imports[b.dataset.retry];
           await store.commit([{ set: ['imports', r.id, { ...r, status: 'processing', error: '', started_at: new Date().toISOString() }] }]);
@@ -832,8 +893,19 @@ export function startApp(store, user, { signOut } = {}) {
 
         let url = null, gone = false;
         cleanup.push(() => { gone = true; if (url) URL.revokeObjectURL(url); });
-        store.getFile(row.file_id).then(blob => {
+        store.getFile(row.file_id).then(async blob => {
           if (gone) return;
+          if (row.media_type === claude.DOCX) {   // show the Word document as converted HTML, scripts disabled
+            const html = await claude.docxToHtml(blob);
+            if (gone) return;
+            const frame = document.createElement('iframe');
+            frame.title = 'Original document';
+            frame.setAttribute('sandbox', '');
+            frame.srcdoc = `<!doctype html><meta charset="utf-8"><style>body{font:14px/1.5 system-ui,sans-serif;margin:1rem;color:#1f2328;background:#fff}
+              table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.25rem .4rem}img{max-width:100%}</style>${html}`;
+            document.getElementById('preview').replaceChildren(frame);
+            return;
+          }
           url = URL.createObjectURL(blob);
           document.getElementById('preview').innerHTML = row.media_type === 'application/pdf'
             ? `<iframe src="${url}" title="Original document"></iframe>` : `<img src="${url}" alt="Original document">`;

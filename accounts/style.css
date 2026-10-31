@@ -215,3 +215,6 @@ code { background: var(--bg); padding: .05rem .3rem; border-radius: 4px; }
 @media (max-width: 640px) {
   table.card { display: block; overflow-x: auto; }
 }
+.row-buttons { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+#driveBtn { display: inline-flex; align-items: center; gap: .5rem; }
+#driveBtn svg { width: 18px; height: 16px; }

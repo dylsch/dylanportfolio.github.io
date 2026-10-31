@@ -37,9 +37,29 @@ Any other Google account gets **🔒 Private**.
 ## Importing documents with Claude
 On the **Import** page, paste an Anthropic API key from [console.anthropic.com](https://console.anthropic.com/). It is
 saved in `ledger/{uid}/secrets/anthropic`, which only your account can read, and it is sent only to `api.anthropic.com`.
-Documents go straight from your browser to Anthropic. The originals are stored in Firestore, in chunks under `ledger/{uid}/files`.
+Documents (uploaded or from Google Drive) go straight from your browser to Anthropic. The originals are stored in Firestore, in chunks under `ledger/{uid}/files`.
 Firebase Storage isn't used because it needs the paid plan.
 Keep the Import page open while Claude reads the documents.
+
+## Importing from Google Drive
+The **Choose from Google Drive** button on the Import page opens Google's own file picker. You can pick PDFs,
+Word documents (`.docx`) and Google Docs. Google Docs are exported as PDF. The app asks Google only for
+**access to the files you pick** (the `drive.file` permission), never your whole Drive. The first time, a Google window asks you to allow
+this. The permission lasts about an hour, after which it asks again. Files that were already imported from Drive are skipped.
+
+One-time setup in Google Cloud (the Firebase project is also a Google Cloud project):
+1. Open <https://console.cloud.google.com/apis/library?project=my-accounts-d5e9f>. Search for and **Enable** both
+   **Google Drive API** and **Google Picker API**.
+2. Open **APIs & Services → Credentials** and click **Browser key (auto created by Firebase)**. If *API restrictions*
+   is set to *Restrict key*, tick **Google Picker API** in the list as well, then save. If it says *Don't restrict key*, leave it.
+3. If Google says *"Access blocked"* when you allow Drive, go to **Google Auth Platform → Audience** and add your Gmail address
+   as a **test user**, or click **Publish app**. `drive.file` isn't a sensitive permission, so Google doesn't need to review the app.
+
+## Word documents
+Claude can't read `.docx` files directly, so they're converted to HTML in your browser first. Text and tables carry over,
+using [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD licence, in `vendor/`). The review screen shows the converted
+document. Old `.doc` files aren't supported, so save them as `.docx` or PDF. A Word file that only contains a scanned image has no
+text to read, so export it as PDF instead.
 
 ## Backups
 **Settings → Backup** downloads all clients, invoices, expenses and settings as JSON. The same button restores them.

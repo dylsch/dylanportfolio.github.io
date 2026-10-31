@@ -1,4 +1,4 @@
-// Read past invoices and receipts (PDF or image) with Claude, straight from the browser.
+// Read past invoices and receipts (PDF, Word .docx or image) with Claude, straight from the browser.
 // Claude only extracts what is on the document; whether the result is safe to add without a
 // human look is decided in logic.js (problems), by re-checking the arithmetic and required fields.
 import * as malta from './malta.js';
@@ -7,7 +7,33 @@ export const MODEL = 'claude-opus-5-5';
 
 export const MEDIA_TYPES = {
   pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
+export const DOCX = MEDIA_TYPES.docx;
+
+// Word documents: Claude reads PDFs and images, not .docx, so a Word file is converted to HTML
+// in the browser first (tables and headings survive). mammoth is vendored and loaded on demand.
+let mammothLoading = null;
+function loadMammoth() {
+  if (window.mammoth) return Promise.resolve(window.mammoth);
+  return mammothLoading ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = new URL('./vendor/mammoth.browser.min.js', import.meta.url).href;
+    s.onload = () => resolve(window.mammoth);
+    s.onerror = () => { mammothLoading = null; reject(new Error("Couldn't load the Word converter. Check your connection.")); };
+    document.head.appendChild(s);
+  });
+}
+
+export async function docxToHtml(blob) {
+  const mammoth = await loadMammoth();
+  try {
+    const { value } = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+    return value;
+  } catch {
+    throw new ExtractionError("This Word file couldn't be opened. Old .doc files aren't supported – save it as .docx or PDF.");
+  }
+}
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 const str = description => ({ type: 'string', description });
@@ -79,10 +105,17 @@ export function blobToBase64(blob) {
 
 // Send one document to Claude and return the extracted fields.
 export async function extract(blob, mediaType, owner, apiKey) {
-  const data = await blobToBase64(blob);
-  const block = mediaType === 'application/pdf'
-    ? { type: 'document', source: { type: 'base64', media_type: mediaType, data } }
-    : { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
+  let block;
+  if (mediaType === DOCX) {
+    const html = await docxToHtml(blob);
+    if (!html.replace(/<[^>]*>/g, '').trim()) throw new ExtractionError('This Word document has no text in it (it may only contain a scanned image) – export it as PDF instead.');
+    block = { type: 'document', source: { type: 'text', media_type: 'text/plain', data: html }, title: 'Word document converted to HTML' };
+  } else {
+    const data = await blobToBase64(blob);
+    block = mediaType === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: mediaType, data } }
+      : { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
+  }
   let res;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {

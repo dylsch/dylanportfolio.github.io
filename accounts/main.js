@@ -23,7 +23,7 @@ if (!cfg.apiKey || cfg.apiKey.startsWith('PASTE')) {
 async function run() {
   const [{ initializeApp }, auth_, fs] = await Promise.all(
     ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(f => import(FIREBASE + f)));
-  const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } = auth_;
+  const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, reauthenticateWithPopup } = auth_;
   // A named app instance keeps this page's sign-in separate from anything else on the site.
   const app = initializeApp(cfg, 'accounts');
   const auth = getAuth(app);
@@ -47,6 +47,35 @@ async function run() {
         else if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request')
           gate(`<h1>⚠️ Sign-in failed</h1><p>${esc(e.message)}</p>${otherAccount}`);
       }
+    };
+  }
+
+  // Google Drive: asks for read access to the files you pick (drive.file) only when you first use it,
+  // with the same Google account. The access token is kept in memory and lasts about an hour.
+  function driveAccess(user) {
+    let token = null, expires = 0;
+    return {
+      apiKey: cfg.apiKey,
+      appId: cfg.messagingSenderId,   // the Cloud project number, which the picker needs
+      async getToken() {
+        if (token && Date.now() < expires) return token;
+        const p = new GoogleAuthProvider();
+        p.addScope('https://www.googleapis.com/auth/drive.file');
+        p.setCustomParameters({ login_hint: user.email });
+        let result;
+        try { result = await reauthenticateWithPopup(auth.currentUser, p); }
+        catch (e) {
+          if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return null;
+          if (e.code === 'auth/user-mismatch') throw new Error(`Choose ${user.email} in the Google window – the one you're signed in with.`);
+          if (e.code === 'auth/popup-blocked') throw new Error('Your browser blocked the Google window. Allow pop-ups for this site and try again.');
+          throw e;
+        }
+        const cred = GoogleAuthProvider.credentialFromResult(result);
+        if (!cred?.accessToken) throw new Error("Google didn't grant access to Drive.");
+        token = cred.accessToken;
+        expires = Date.now() + 50 * 60 * 1000;
+        return token;
+      },
     };
   }
 
@@ -76,6 +105,6 @@ async function run() {
     started = true;
     $('#gate').hidden = true;
     $('#app').hidden = false;
-    startApp(store, user, { signOut: () => signOut(auth) });
+    startApp(store, user, { signOut: () => signOut(auth), drive: driveAccess(user) });
   });
 }

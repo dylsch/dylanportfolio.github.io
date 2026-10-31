@@ -7,5 +7,6 @@ window.ACCOUNTS_FIREBASE = {
   apiKey: 'AIzaSyB0nUpOTkJClxvvwOKYAoYhNR52j1bVrHI',
   authDomain: 'my-accounts-d5e9f.firebaseapp.com',
   projectId: 'my-accounts-d5e9f',
-  appId: '1:931715851169:web:699e0450bdb33173bba1e0'
+  appId: '1:931715851169:web:699e0450bdb33173bba1e0',
+  messagingSenderId: '931715851169'  // project number, used by the Google Drive picker
 };
