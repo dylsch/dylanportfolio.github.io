@@ -1,5 +1,5 @@
 // Bookkeeping logic shared by the pages: totals, the year summary, CSV exports and turning
-// documents read by Claude into invoices and expenses. Pure functions over the store's data.
+// imported documents and spreadsheets into invoices and expenses. Pure functions over the store's data.
 import * as malta from './malta.js';
 
 export const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'cancelled'];
