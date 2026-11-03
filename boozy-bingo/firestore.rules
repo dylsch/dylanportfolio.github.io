@@ -71,6 +71,33 @@ service cloud.firestore {
       allow read, write: if isSelf(uid) && isHost();
     }
 
+    // santa/{drawId}: Secret Santa draws. Each participant's page is read with the secret token in
+    // their private link (no sign-in needed); pages can't be listed, so nobody can browse other matches.
+    match /santa/{drawId} {
+      function isOrganiser() { return isHost() && get(/databases/$(database)/documents/santa/$(drawId)).data.hostUid == request.auth.uid; }
+      allow create: if isHost() && request.resource.data.hostUid == request.auth.uid;
+      allow get, update, delete: if isHost() && resource.data.hostUid == request.auth.uid;
+
+      match /reveals/{token} {
+        allow get: if true;
+        allow list: if false;
+        allow create, delete: if isOrganiser();
+        // The participant may only stamp the moment they first opened their match.
+        allow update: if resource.data.openedAt == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['openedAt'])
+          && request.resource.data.openedAt == request.time;
+      }
+      match /wishes/{wishId} {
+        allow get: if true;
+        allow list: if false;
+        allow create, delete: if isOrganiser();
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist', 'updatedAt'])
+          && request.resource.data.wishlist is string
+          && request.resource.data.wishlist.size() <= 1000
+          && request.resource.data.updatedAt == request.time;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

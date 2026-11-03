@@ -1,0 +1,272 @@
+// Party Games: Secret Santa. Draws who buys for whom (no self-draws, respecting exclusions) without the
+// organiser seeing the pairings, then reveals each match privately: secret links (online, santa.html),
+// pass-the-phone on this device, or printed fold-over slips.
+window.startBoozySanta = () => {
+  'use strict';
+
+  const KEY = 'boozyBingo.santa';
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const host = $('#tab-santa');
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+  const S = Object.assign({
+    event: `Secret Santa ${new Date().getFullYear()}`, budget: '€20', date: '', note: '',
+    people: '', exclusions: '', noSwaps: true, draw: null, method: 'links'
+  }, load());
+  let cloud = null;
+  const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3500); };
+  const token = (n = 20) => { const abc = 'abcdefghjkmnpqrstuvwxyz23456789'; return [...crypto.getRandomValues(new Uint8Array(n))].map(x => abc[x % abc.length]).join(''); };
+  const nameKey = s => s.trim().toLowerCase();
+
+  // ---------- Parsing & the draw ----------
+  // One person per line, optionally with an email: "Anna", "Anna, anna@x.com" or "Anna <anna@x.com>".
+  // Emails only ever stay in this browser; they're used to address the invite emails.
+  const EMAIL = /^(.*?)[\s,;<]+([^\s<>,;@]+@[^\s<>,;@]+\.[^\s<>,;@]+)>?$/;
+  const entries = () => {
+    const seen = new Set();
+    return S.people.split('\n').map(line => {
+      const l = line.trim().replace(/\s+/g, ' '), m = l.match(EMAIL);
+      return m ? { name: m[1].trim(), email: m[2] } : { name: l, email: '' };
+    }).filter(e => e.name && !seen.has(nameKey(e.name)) && seen.add(nameKey(e.name)));
+  };
+  const people = () => entries().map(e => e.name);
+  // "Anna & Ben", "Anna, Ben", "Anna - Ben": these two never draw each other (either way round).
+  function exclusions(names) {
+    const known = new Map(names.map(n => [nameKey(n), n])), pairs = [], unknown = [];
+    S.exclusions.split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
+      const parts = line.split(/\s*(?:&|,|\+|\/|\band\b|\s-\s)\s*/i).map(s => s.trim()).filter(Boolean);
+      const found = parts.map(p => known.get(nameKey(p)));
+      parts.forEach((p, i) => { if (!found[i]) unknown.push(p); });
+      const ok = found.filter(Boolean);
+      for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length; j++) pairs.push([ok[i], ok[j]]);
+    });
+    return { pairs, unknown };
+  }
+  // Backtracking search over a shuffled order: everyone gives to exactly one other person.
+  function drawPairs(names, pairs, noSwaps) {
+    const banned = new Set(pairs.flatMap(([a, b]) => [`${a}→${b}`, `${b}→${a}`]));
+    const order = names.slice().sort(() => Math.random() - 0.5);
+    const taken = new Set(), result = {};
+    let steps = 0;
+    function place(i) {
+      if (i === order.length) return true;
+      if (++steps > 200000) return false;
+      const giver = order[i];
+      const options = names.filter(r => r !== giver && !taken.has(r) && !banned.has(`${giver}→${r}`)
+        && !(noSwaps && names.length > 3 && result[r] === giver)).sort(() => Math.random() - 0.5);
+      for (const r of options) {
+        result[giver] = r; taken.add(r);
+        if (place(i + 1)) return true;
+        delete result[giver]; taken.delete(r);
+      }
+      return false;
+    }
+    return place(0) ? result : null;
+  }
+
+  // ---------- Setup ----------
+  function render() {
+    if (S.draw) return renderDraw();
+    const names = people(), ex = exclusions(names);
+    host.innerHTML = `<div class="grid2">
+      <div class="card">
+        <h2>🎁 Secret Santa</h2>
+        <p class="hint">Add everyone taking part and press <b>Draw names</b>. Each person gets someone to buy for, never themselves, and you, the organiser, won't see who got whom.</p>
+        <div class="fields">
+          <div style="grid-column:1/-1"><label for="ssEvent">Event name</label><input type="text" id="ssEvent" value="${esc(S.event)}"></div>
+          <div><label for="ssBudget">Budget</label><input type="text" id="ssBudget" value="${esc(S.budget)}" placeholder="€20"></div>
+          <div><label for="ssDate">Gift exchange date</label><input type="date" id="ssDate" value="${esc(S.date)}"></div>
+        </div>
+        <label for="ssNote">Note for everyone (optional)</label>
+        <input type="text" id="ssNote" maxlength="200" value="${esc(S.note)}" placeholder="e.g. Bring your gift wrapped to the office party">
+        <label class="check"><input type="checkbox" id="ssSwaps" ${S.noSwaps ? 'checked' : ''}> Don't let two people simply buy for each other</label>
+      </div>
+      <div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between"><h2 style="margin:0">Who's taking part?</h2><span class="pill ${names.length >= 3 ? 'ok' : 'warn'}">${names.length} people</span></div>
+          <p class="hint">One person per line. Add an email after a comma to send them an email invite: <i>Anna, anna@example.com</i>. Emails stay on this device.</p>
+          <textarea class="short" id="ssPeople" placeholder="Anna, anna@example.com&#10;Ben, ben@example.com&#10;Clara&#10;Daniel">${esc(S.people)}</textarea>
+        </div>
+        <div class="card">
+          <h2>Exclusions (optional)</h2>
+          <p class="hint">People who shouldn't draw each other, like couples or housemates. One pair per line, e.g. <i>Anna &amp; Ben</i>.</p>
+          <textarea class="short" id="ssEx" style="min-height:90px" placeholder="Anna & Ben">${esc(S.exclusions)}</textarea>
+          ${ex.unknown.length ? `<p class="pill warn mt">Not in the list: ${ex.unknown.map(esc).join(', ')}</p>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="row mt"><button class="btn primary" id="ssDraw" ${names.length >= 3 ? '' : 'disabled'}>🎲 Draw names</button>
+      <span class="hint">${names.length >= 3 ? '' : 'You need at least 3 people.'}</span></div>`;
+    const read = () => {
+      S.event = $('#ssEvent').value.trim() || 'Secret Santa'; S.budget = $('#ssBudget').value.trim(); S.date = $('#ssDate').value;
+      S.note = $('#ssNote').value.trim(); S.noSwaps = $('#ssSwaps').checked; S.people = $('#ssPeople').value; S.exclusions = $('#ssEx').value;
+      save();
+    };
+    host.querySelectorAll('input, textarea').forEach(el => el.addEventListener('change', () => { read(); render(); }));
+    $('#ssDraw').onclick = async () => { read(); await doDraw(); };
+  }
+
+  async function doDraw() {
+    const list = entries(), names = list.map(e => e.name), ex = exclusions(names);
+    const result = drawPairs(names, ex.pairs, S.noSwaps);
+    if (!result) { toast('😕 No valid draw with these exclusions. Try removing one.'); return; }
+    // The pairings are only kept as private per-person entries; the organiser's screen never lists them.
+    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ name: e.name, email: e.email, token: token(), wish: token(), to: result[e.name], seen: false })), online: false, opened: {} };
+    save();
+    if (cloud) await publish();
+    render();
+    toast('🎁 Names drawn! Nobody knows who got whom… yet.');
+  }
+
+  // ---------- Online: secret links ----------
+  const linkFor = p => new URL(`santa.html?d=${S.draw.id}&t=${p.token}`, location.href).href;
+  // A ready-to-send invite in the organiser's own email app. It only contains the link, never the match.
+  function mailto(p) {
+    const fmtDate = S.date ? new Date(S.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+    const body = [`Hi ${p.name},`, '', `You're invited to ${S.event}! 🎁`, '',
+      'Names have been drawn, and your match is waiting behind your private link. It\'s just for you, so please don\'t share it:', linkFor(p), '',
+      ...(S.budget ? [`Budget: ${S.budget}`] : []), ...(fmtDate ? [`Gift exchange: ${fmtDate}`] : []), ...(S.note ? [S.note] : []),
+      '', 'On the same page you can write a wishlist for your Secret Santa.', '', 'Ho ho ho! 🎅'].join('\n');
+    return `mailto:${encodeURIComponent(p.email || '')}?subject=${encodeURIComponent(`🎁 Your ${S.event} invite`)}&body=${encodeURIComponent(body)}`;
+  }
+  async function publish() {
+    const d = S.draw, fs = cloud.fs, db = cloud.db;
+    const wishOf = name => d.people.find(p => p.name === name).wish;
+    try {
+      await fs.setDoc(fs.doc(db, 'santa', d.id), { hostUid: cloud.user.uid, event: S.event, createdAt: fs.serverTimestamp() });
+      await Promise.all(d.people.flatMap(p => [
+        fs.setDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token), {
+          name: p.name, to: p.to, event: S.event, budget: S.budget, date: S.date, note: S.note,
+          myWish: p.wish, theirWish: wishOf(p.to), openedAt: null
+        }),
+        fs.setDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish), { name: p.name, wishlist: '', updatedAt: null })
+      ]));
+      d.online = true; save();
+    } catch (e) { toast('⚠️ Couldn\'t create the private links: ' + e.message); }
+  }
+  async function unpublish(d) {
+    if (!cloud || !d || !d.online) return;
+    const fs = cloud.fs, db = cloud.db;
+    await Promise.all(d.people.flatMap(p => [
+      fs.deleteDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token)), fs.deleteDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish))
+    ])).catch(() => {});
+    await fs.deleteDoc(fs.doc(db, 'santa', d.id)).catch(() => {});
+  }
+  // Who has opened their link (never what it says).
+  async function refreshOpened() {
+    if (!cloud || !S.draw || !S.draw.online) return;
+    const fs = cloud.fs, db = cloud.db;
+    await Promise.all(S.draw.people.map(async p => {
+      try { const snap = await fs.getDoc(fs.doc(db, 'santa', S.draw.id, 'reveals', p.token)); S.draw.opened[p.name] = !!(snap.exists() && snap.data().openedAt); } catch {}
+    }));
+    save(); if ($('#ssLinks')) renderDraw();
+  }
+
+  // ---------- After the draw ----------
+  function renderDraw() {
+    const d = S.draw;
+    const tabs = [['links', '📱 Private links'], ['pass', '🖐️ Pass the phone'], ['print', '🖨️ Print slips']];
+    const fmtDate = S.date ? new Date(S.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'long' }) : '';
+    host.innerHTML = `<div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div><h2 style="margin:0">🎁 ${esc(S.event)}</h2>
+            <p class="hint" style="margin:4px 0 0">${d.people.length} people${S.budget ? ` · budget ${esc(S.budget)}` : ''}${fmtDate ? ` · exchange ${esc(fmtDate)}` : ''} · drawn ${new Date(d.at).toLocaleDateString()}</p></div>
+          <div class="row"><button class="btn" id="ssPeek" title="Shows every pairing">🙈 Reveal all</button><button class="btn danger" id="ssReset">Start over</button></div>
+        </div>
+        <p class="hint mt">🤫 The names are drawn. Choose how each person finds out who they're buying for:</p>
+        <div class="seg">${tabs.map(([id, n]) => `<button class="${S.method === id ? 'active' : ''}" data-method="${id}">${n}</button>`).join('')}</div>
+      </div>
+      <div class="mt" id="ssBody"></div>`;
+    host.querySelectorAll('[data-method]').forEach(b => b.onclick = () => { S.method = b.dataset.method; save(); renderDraw(); });
+    $('#ssReset').onclick = async () => {
+      if (!confirm('Start over? The current draw and any private links will be deleted.')) return;
+      const old = S.draw; S.draw = null; save(); await unpublish(old); render();
+    };
+    $('#ssPeek').onclick = () => {
+      if (!confirm('Show every pairing? This spoils the surprise for you!')) return;
+      $('#ssBody').innerHTML = `<div class="card"><h2>All pairings</h2><div class="lrlist ssall">${d.people.map(p => `<div><span>${esc(p.name)}</span><b>→ ${esc(p.to)}</b></div>`).join('')}</div>
+        <button class="btn mt" id="ssHide">Hide</button></div>`;
+      $('#ssHide').onclick = renderDraw;
+    };
+    const body = $('#ssBody');
+    if (S.method === 'links') {
+      if (!cloud) {
+        body.innerHTML = `<div class="card"><h2>📱 Private links</h2><p class="hint">Private links need the online version of Party Games, signed in with Google. On this device you can use <b>Pass the phone</b> or <b>Print slips</b> instead.</p></div>`;
+      } else if (!d.online) {
+        body.innerHTML = `<div class="card"><h2>📱 Private links</h2><p class="hint">This draw was made offline. Create the links now?</p><button class="btn primary" id="ssPublish">Create private links</button></div>`;
+        $('#ssPublish').onclick = async () => { await publish(); renderDraw(); };
+      } else {
+        const opened = d.people.filter(p => d.opened[p.name]).length;
+        body.innerHTML = `<div class="card" id="ssLinks">
+          <div class="row" style="justify-content:space-between"><h2 style="margin:0">📱 Private links</h2>
+            <span class="row"><span class="pill ${opened === d.people.length ? 'ok' : 'warn'}">${opened} of ${d.people.length} opened</span><button class="btn" id="ssRefresh">↻ Refresh</button></span></div>
+          <p class="hint">Send each person their own invite. <b>✉️ Email</b> opens your email app with the invite ready to send. Their link only shows who <i>they're</i> buying for, and lets them write a wishlist for their Santa.</p>
+          <div class="sslinks">${d.people.map((p, i) => `<div class="sslink">
+            <b>${esc(p.name)}${p.email ? `<small class="hint"> · ${esc(p.email)}</small>` : ''}</b>${d.opened[p.name] ? '<span class="pill ok">opened ✓</span>' : '<span class="pill">not opened</span>'}
+            <span class="row">
+              <a class="btn${p.email ? ' primary' : ''}" href="${esc(mailto(p))}">✉️ Email</a>
+              <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`🎁 Hi ${p.name}! Your ${S.event} match is ready. Open your private link (just for you!): ${linkFor(p)}`)}">WhatsApp</a>
+              <button class="btn" data-copy="${i}">Copy link</button><button class="btn" data-qr="${i}">QR</button>
+            </span></div>`).join('')}</div>
+        </div>`;
+        body.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
+          const p = d.people[b.dataset.copy];
+          navigator.clipboard.writeText(linkFor(p)).then(() => toast(`Link for ${p.name} copied`), () => prompt(`Link for ${p.name}:`, linkFor(p)));
+        });
+        body.querySelectorAll('[data-qr]').forEach(b => b.onclick = () => showQr(d.people[b.dataset.qr]));
+        $('#ssRefresh').onclick = refreshOpened;
+      }
+    } else if (S.method === 'pass') {
+      body.innerHTML = `<div class="card"><h2>🖐️ Pass the phone</h2><p class="hint">Hand this device round. Each person taps their own name, checks who they got, and hides it again before passing it on.</p>
+        <div class="packs">${d.people.map((p, i) => `<button class="pack${p.seen ? ' active' : ''}" data-pass="${i}"><span class="pe">${p.seen ? '✅' : '🎁'}</span><b>${esc(p.name)}</b>${p.seen ? '<small>seen</small>' : ''}</button>`).join('')}</div></div>`;
+      body.querySelectorAll('[data-pass]').forEach(b => b.onclick = () => passReveal(d.people[b.dataset.pass]));
+    } else {
+      body.innerHTML = `<div class="card"><h2>🖨️ Print slips</h2><p class="hint">Prints one slip per person. Cut along the dashed lines, then fold the striped flap up over the middle so only the person's name shows. Hand each slip to the person named on it.</p>
+        <button class="btn primary" id="ssPrint">🖨️ Print slips</button></div>`;
+      $('#ssPrint').onclick = printSlips;
+    }
+  }
+
+  function overlay(html) {
+    const ov = document.createElement('div');
+    ov.className = 'qroverlay ssov';
+    ov.innerHTML = html;
+    document.body.appendChild(ov);
+    return ov;
+  }
+  function showQr(p) {
+    const qr = window.qrcode(0, 'M'); qr.addData(linkFor(p)); qr.make();
+    const ov = overlay(`<div class="qrbig" style="width:min(60vh,80vw)">${qr.createSvgTag({ cellSize: 10, margin: 2, scalable: true })}</div>
+      <h2>Only ${esc(p.name)} should scan this 🤫</h2><p class="hint">Click anywhere to close</p>`);
+    ov.onclick = () => ov.remove();
+  }
+  function passReveal(p) {
+    const ov = overlay(`<div class="ssbox">🎁</div><h2>Are you ${esc(p.name)}?</h2><p>Make sure nobody else is looking!</p>
+      <div class="row" style="justify-content:center"><button class="btn primary" id="ssYes">Yes, show me</button><button class="btn" id="ssNo">Not me</button></div>`);
+    ov.style.cursor = 'default';
+    ov.querySelector('#ssNo').onclick = () => ov.remove();
+    ov.querySelector('#ssYes').onclick = () => {
+      ov.innerHTML = `<p class="hint">${esc(p.name)}, you're buying a gift for…</p><h2 class="ssname">${esc(p.to)}</h2>
+        ${S.budget ? `<p>Budget: <b>${esc(S.budget)}</b></p>` : ''}${S.note ? `<p class="hint">${esc(S.note)}</p>` : ''}
+        <button class="btn primary mt" id="ssGot">Got it, hide it</button>`;
+      ov.querySelector('#ssGot').onclick = () => { p.seen = true; save(); ov.remove(); renderDraw(); };
+    };
+  }
+  function printSlips() {
+    const fmtDate = S.date ? new Date(S.date + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    $('#printArea').innerHTML = `<div class="ssslips">${S.draw.people.map(p => `<div class="ssslip">
+      <div class="ssfront">🎁 ${esc(S.event)}<b>For ${esc(p.name)} only</b></div>
+      <div class="ssback">You're buying a gift for<b>${esc(p.to)}</b>${S.budget ? `<span>Budget: ${esc(S.budget)}</span>` : ''}${fmtDate ? `<span>Exchange: ${esc(fmtDate)}</span>` : ''}${S.note ? `<span>${esc(S.note)}</span>` : ''}<small>🤫 Keep it secret!</small></div>
+      <div class="ssflap"><span>↑ Fold this flap up over the middle to hide the name ↑</span></div>
+    </div>`).join('')}</div>`;
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => setTimeout(() => window.print(), 50));
+  }
+
+  window.boozySanta = {
+    render,
+    connect(ctx) { cloud = ctx; if (S.draw && S.draw.online) refreshOpened(); },
+    _draw: drawPairs // exposed for testing the draw logic
+  };
+  render();
+};

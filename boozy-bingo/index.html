@@ -83,6 +83,17 @@ body:not(.is-admin) .admin-only { display: none; }
 .lrans .who, .lrans .pts { color: var(--muted); font-size: 12px; }
 .lrans.unique { border-color: var(--green); } .lrans.unique .pts { color: var(--green); font-weight: 600; }
 .lrans.shared { border-color: var(--accent); } .lrans.shared .pts { color: var(--accent); font-weight: 600; }
+/* Secret Santa */
+.sslinks { display: grid; gap: 8px; margin-top: 12px; }
+.sslink { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.sslink b { word-break: break-word; }
+.sslink .row a.btn { text-decoration: none; }
+@media (max-width: 640px) { .sslink { grid-template-columns: 1fr auto; } .sslink .row { grid-column: 1 / -1; } }
+.ssov { cursor: pointer; }
+.ssov p { font-size: 18px; }
+.ssbox { font-size: 80px; }
+.ssname { font: 700 clamp(44px, 9vw, 96px) Fredoka, sans-serif; color: var(--accent); margin: 0; }
+.ssall div { grid-template-columns: 1fr 1fr; }
 /* Stats page */
 .stbar { justify-content: space-between; margin-bottom: 14px; }
 .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
@@ -155,15 +166,16 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-weight: 500; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
 
-button.btn {
+.btn {
+  text-decoration: none;
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
   padding: 9px 14px; font: 600 14px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
 }
-button.btn:hover { border-color: var(--accent); }
-button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-button.btn.spotify { background: var(--green); color: #04130a; border-color: var(--green); }
-button.btn.danger { color: var(--danger); }
-button.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.spotify { background: var(--green); color: #04130a; border-color: var(--green); }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
 .mt { margin-top: 14px; }
 
 .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--panel-2); color: var(--muted); }
@@ -332,6 +344,15 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   .qsheet li i { font-style: normal; display: inline-block; width: 8mm; height: 8mm; line-height: 7.5mm; text-align: center; border: 1.5px solid var(--ink, #d35400); border-radius: 50%; margin-right: 3mm; font-size: 10pt; color: var(--ink, #d35400); }
   .qsheet.key ol { columns: 1; font-size: 10.5pt; }
   .qsheet.key li { margin-bottom: 2.5mm; }
+  .ssslips { display: grid; grid-template-columns: 1fr 1fr; gap: 0; font-family: Inter, sans-serif; color: #1a1020; }
+  .ssslip { border: 1.5px dashed #999; break-inside: avoid; height: 88mm; display: grid; grid-template-rows: 22mm 1fr 1fr; }
+  .ssslip > div { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2mm 6mm; gap: 1mm; font-size: 10pt; }
+  .ssfront { color: #c0392b; font-weight: 600; }
+  .ssback { border-top: 1.5px dotted #c0392b; }
+  .ssflap { border-top: 1.5px dotted #c0392b; color: #c0392b; background: repeating-linear-gradient(45deg, #f6d4d4 0 6px, #fff 6px 12px); }
+  .ssflap span { background: #fff; padding: 1mm 3mm; border-radius: 2mm; font-size: 8.5pt; font-weight: 600; }
+  .ssslip b { font: 700 18pt Fredoka, sans-serif; color: #1a1020; }
+  .ssslip small { color: #888; font-size: 8pt; }
   .qsheet .qfoot { font-size: 9pt; color: #777; margin-top: 6mm; text-align: center; }
 }
 </style>
@@ -384,6 +405,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
     <button data-tab="quiz" data-group="quiz" hidden><span class="n">2</span>🧠 Run the quiz</button>
     <button data-tab="mlt" data-group="mlt" hidden><span class="n">2</span>🙋 Play</button>
     <button data-tab="letters" data-group="letters" hidden><span class="n">2</span>🔤 Play</button>
+    <button data-tab="santa" data-group="santa" hidden>🎁 Secret Santa</button>
   </nav>
 
   <!-- SONGS -->
@@ -541,6 +563,9 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   <!-- LETTER RUSH (rendered by letters.js) -->
   <section class="tab" id="tab-letters"></section>
 
+  <!-- SECRET SANTA (rendered by santa.js) -->
+  <section class="tab" id="tab-santa"></section>
+
   <!-- STATS (rendered by stats.js) -->
   <section class="tab" id="tab-stats"></section>
 
@@ -585,6 +610,7 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
 <script src="mlt.js"></script>
 <script src="letters.js"></script>
 <script src="stats.js"></script>
+<script src="santa.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="live.js"></script>
 <script>
@@ -595,6 +621,7 @@ window.startBoozyApp = () => {
   window.startBoozyMlt();
   window.startBoozyLetters();
   window.startBoozyStats();
+  window.startBoozySanta();
 
   // ---------- Storage ----------
   const KEY = 'boozyBingo.v1';
@@ -799,7 +826,9 @@ Kanye West - Gold Digger`
     { id: 'mlt', emoji: '🙋', name: "Who's Most Likely To", tab: 'mlt', tags: ['📱 Phones', '👉 No phones needed'],
       desc: 'Everyone votes for who fits the prompt best. Most votes wins the round.' },
     { id: 'letters', emoji: '🔤', name: 'Letter Rush', tab: 'letters', tags: ['📱 Phones', '⏱ Timer', '👉 No phones needed'],
-      desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' }
+      desc: 'A random letter and a category against the clock: "a fruit starting with B". Unique answers score most.' },
+    { id: 'santa', emoji: '🎁', name: 'Secret Santa', tab: 'santa', tags: ['✉️ Email invites', '📱 Private links', '🖨️ Print'],
+      desc: 'Draw names for a gift exchange. Everyone finds out privately who they\'re buying for, with wishlists.' }
   ];
   // Pages that aren't games: opened from the top bar, never shown as tiles.
   const PAGES = [{ id: 'access', emoji: '🔒', name: 'Access', tab: 'access' }, { id: 'stats', emoji: '📊', name: 'Stats', tab: 'stats' }];
@@ -835,6 +864,7 @@ Kanye West - Gold Digger`
     if (home) $$('section.tab').forEach(s => s.classList.remove('active'));
     else $('#gameTitle').textContent = `${gameOf(m).emoji} ${gameOf(m).name}`;
     $$('#tabs button').forEach(b => { b.hidden = !inGroup(b, m); });
+    if ($$('#tabs button').filter(b => !b.hidden).length < 2) $('#tabs').hidden = true; // a single tab needs no tab bar
     $('#accessBtn').classList.toggle('primary', m === 'access');
     $('#statsBtn').classList.toggle('primary', m === 'stats');
     try { sessionStorage.setItem('boozyBingo.game', m); } catch {}

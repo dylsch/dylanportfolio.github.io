@@ -113,6 +113,7 @@ async function run() {
     window.startBoozyApp();
     if (window.startBoozyLive) window.startBoozyLive({ db, fs, user });
     if (window.boozyStats) window.boozyStats.connect({ db, fs, user });
+    if (window.boozySanta) window.boozySanta.connect({ db, fs, user });
     if (isAdmin) startAdmin();
   }
 

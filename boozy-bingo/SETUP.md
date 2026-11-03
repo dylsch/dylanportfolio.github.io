@@ -29,3 +29,4 @@ Commit `firebase-config.js` and push. Open the page, sign in with your account, 
 - If you update the rules later, re-publish the whole `firestore.rules` file in the console (with your email filled in).
 - You only see new requests while the app is open. Email alerts would need Firebase's paid plan (Cloud Functions) or a service like EmailJS.
 - Remove someone from **Allowed people** and their open app locks immediately.
+- Secret Santa: each participant's private link works without signing in. Matches can only be read with the secret token in that person's link and can never be listed, not even by the organiser. Participant emails stay in the organiser's browser and are never uploaded.

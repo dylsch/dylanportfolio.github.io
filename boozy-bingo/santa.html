@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0c1f17">
+<title>Secret Santa · Party Games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c1f17; --panel: #12291f; --panel-2: #193628; --line: #2a5040; --text: #f3fbf6; --muted: #a9c9b8;
+  --accent: #f2c14e; --accent-ink: #241a00; --pink: #ff5a67; --green: #1ed760;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 16px/1.5 Inter, system-ui, sans-serif; min-height: 100vh; }
+h1, h2, h3 { font-family: Fredoka, Inter, sans-serif; font-weight: 600; margin: 0 0 .4em; }
+.wrap { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
+header { font: 700 20px Fredoka, sans-serif; margin-bottom: 14px; }
+header span { color: var(--accent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+.card + .card { margin-top: 14px; }
+.center { text-align: center; }
+.hint { color: var(--muted); font-size: 14px; }
+.btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; font: 600 16px Inter, sans-serif; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .6; }
+.gift { font-size: 96px; line-height: 1; background: none; border: 0; cursor: pointer; display: block; margin: 10px auto; animation: wobble 2.4s ease-in-out infinite; }
+.gift.open { animation: unwrap .6s ease-in forwards; }
+@keyframes wobble { 0%, 80%, 100% { transform: rotate(0); } 85% { transform: rotate(-8deg); } 90% { transform: rotate(8deg); } 95% { transform: rotate(-4deg); } }
+@keyframes unwrap { 0% { transform: scale(1); } 50% { transform: scale(1.25) rotate(10deg); } 100% { transform: scale(0); opacity: 0; } }
+.name { font: 700 clamp(38px, 11vw, 56px) Fredoka, sans-serif; color: var(--accent); margin: 4px 0 8px; animation: pop .45s ease-out; word-break: break-word; }
+@keyframes pop { 0% { transform: scale(.5); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+.facts { display: grid; gap: 6px; margin: 12px 0 4px; }
+.facts div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.wish { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+textarea { width: 100%; min-height: 120px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; resize: vertical; }
+textarea:focus, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mt { margin-top: 12px; }
+</style>
+</head>
+<body>
+<script src="themes.js"></script>
+<script>BoozyThemes.apply('christmas');</script>
+<div class="wrap">
+  <header>🎁 Secret <span>Santa</span></header>
+  <div id="view"><div class="card center"><p class="hint">Loading…</p></div></div>
+</div>
+<script src="firebase-config.js"></script>
+<script type="module">
+// Each participant's private page. The link's token is the only key to their match, so pages can't be listed.
+const FIREBASE = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const view = $('#view');
+const q = new URLSearchParams(location.search), drawId = q.get('d'), tok = q.get('t');
+const screen = (icon, title, text) => { view.innerHTML = `<div class="card center"><div style="font-size:48px">${icon}</div><h2>${title}</h2><p class="hint">${text}</p></div>`; };
+
+if (!drawId || !tok) screen('🔗', 'Link incomplete', 'Open the full link from your invite.');
+else main().catch(e => screen('📡', "Couldn't load your match", esc(e.message || e) + '. Check your connection and refresh.'));
+
+async function main() {
+  const [{ initializeApp }, fs] = await Promise.all(['firebase-app.js', 'firebase-firestore.js'].map(f => import(FIREBASE + f)));
+  const db = fs.getFirestore(initializeApp(window.BOOZY_FIREBASE, 'santa'));
+  const ref = fs.doc(db, 'santa', drawId, 'reveals', tok);
+  const snap = await fs.getDoc(ref);
+  if (!snap.exists()) return screen('🎄', 'This link has expired', 'The organiser may have redrawn the names. Ask them for your new link.');
+  const r = snap.data();
+  const fmtDate = r.date ? new Date(r.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  document.title = `${r.event} · Secret Santa`;
+
+  view.innerHTML = `<div class="card center">
+    <h1>Hi ${esc(r.name)}! 🎅</h1>
+    <p class="hint">Welcome to <b>${esc(r.event)}</b>. Make sure nobody's looking over your shoulder…</p>
+    <button class="gift" id="gift" aria-label="Unwrap your Secret Santa match">🎁</button>
+    <p class="hint">Tap the present to see who you're buying for</p></div>`;
+  $('#gift').onclick = () => {
+    $('#gift').classList.add('open');
+    setTimeout(reveal, 550);
+    if (!r.openedAt) fs.updateDoc(ref, { openedAt: fs.serverTimestamp() }).catch(() => {});
+  };
+
+  async function reveal() {
+    view.innerHTML = `<div class="card center">
+        <p class="hint">${esc(r.name)}, you're buying a gift for…</p>
+        <div class="name">${esc(r.to)}</div>
+        <div class="facts">${r.budget ? `<div>💶 Budget: <b>${esc(r.budget)}</b></div>` : ''}${fmtDate ? `<div>📅 Gift exchange: <b>${esc(fmtDate)}</b></div>` : ''}${r.note ? `<div>📝 ${esc(r.note)}</div>` : ''}</div>
+        <p class="hint">🤫 Keep it secret!</p>
+        <button class="btn" id="hide">Hide name</button>
+      </div>
+      <div class="card"><h3>🎄 ${esc(r.to)}'s wishlist</h3><div id="theirWish" class="hint">Loading…</div></div>
+      <div class="card"><h3>✍️ Your wishlist</h3>
+        <p class="hint">Give your own Secret Santa some ideas. They'll see this on their page.</p>
+        <textarea id="myWish" maxlength="1000" placeholder="e.g. Books, plants for my balcony, anything chocolate…"></textarea>
+        <div class="row mt"><button class="btn primary" id="saveWish">Save wishlist</button><span class="hint" id="saved"></span></div>
+      </div>`;
+    $('#hide').onclick = () => {
+      const n = view.querySelector('.name'), hidden = n.style.visibility === 'hidden';
+      n.style.visibility = hidden ? 'visible' : 'hidden'; $('#hide').textContent = hidden ? 'Hide name' : 'Show name';
+    };
+    const theirs = await fs.getDoc(fs.doc(db, 'santa', drawId, 'wishes', r.theirWish)).catch(() => null);
+    const wl = theirs && theirs.exists() ? (theirs.data().wishlist || '').trim() : '';
+    $('#theirWish').outerHTML = wl ? `<div class="wish">${esc(wl)}</div>`
+      : `<p class="hint" id="theirWish">${esc(r.to)} hasn't written a wishlist yet. Check back later!</p>`;
+    const mineRef = fs.doc(db, 'santa', drawId, 'wishes', r.myWish);
+    const mine = await fs.getDoc(mineRef).catch(() => null);
+    if (mine && mine.exists()) $('#myWish').value = mine.data().wishlist || '';
+    $('#saveWish').onclick = async () => {
+      $('#saveWish').disabled = true;
+      try {
+        await fs.updateDoc(mineRef, { wishlist: $('#myWish').value.slice(0, 1000), updatedAt: fs.serverTimestamp() });
+        $('#saved').textContent = '✅ Saved. Your Santa can see it now.';
+      } catch (e) { $('#saved').textContent = '⚠️ ' + e.message; }
+      $('#saveWish').disabled = false;
+    };
+  }
+}
+</script>
+</body>
+</html>
