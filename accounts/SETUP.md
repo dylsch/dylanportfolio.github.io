@@ -34,12 +34,18 @@ Any other Google account gets **🔒 Private**.
 - The Firebase config values are meant to be public. The rules are what keep people out.
 - Data isn't cached in the browser. Signing out leaves nothing behind.
 
-## Importing documents with Claude
-On the **Import** page, paste an Anthropic API key from [console.anthropic.com](https://console.anthropic.com/). It is
-saved in `ledger/{uid}/secrets/anthropic`, which only your account can read, and it is sent only to `api.anthropic.com`.
-Documents (uploaded or from Google Drive) go straight from your browser to Anthropic. The originals are stored in Firestore, in chunks under `ledger/{uid}/files`.
-Firebase Storage isn't used because it needs the paid plan.
-Keep the Import page open while Claude reads the documents.
+## Importing past invoices and receipts
+Everything on the **Import** page is free, and the documents never leave your browser except to be stored in your own database.
+
+- **From documents** (upload, or from Google Drive): the app reads the text of PDFs and Word documents in your browser,
+  using [pdf.js](https://mozilla.github.io/pdf.js/) (Apache 2.0) and [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD),
+  both in `vendor/`. It makes a first guess at whether it's your invoice or a supplier's bill, and at the number, dates,
+  client or supplier, VAT and totals. Every document then waits for you to check it next to the original before it's added.
+  Photos and scanned PDFs have no text, so you type their details in. The originals are stored in Firestore, in chunks under
+  `ledger/{uid}/files`. Firebase Storage isn't used because it needs the paid plan.
+- **From a spreadsheet:** download the invoices or expenses template (CSV), fill it in (or paste in your existing list) and import it.
+  It uses the same columns as the CSV exports. Invoice numbers already in your accounts are skipped, and so are expenses with the
+  same date, supplier and amount. Before anything is added, you see what will be added and any rows with problems.
 
 ## Importing from Google Drive
 The **Choose from Google Drive** button on the Import page opens Google's own file picker. You can pick PDFs,
@@ -56,10 +62,8 @@ One-time setup in Google Cloud (the Firebase project is also a Google Cloud proj
    as a **test user**, or click **Publish app**. `drive.file` isn't a sensitive permission, so Google doesn't need to review the app.
 
 ## Word documents
-Claude can't read `.docx` files directly, so they're converted to HTML in your browser first. Text and tables carry over,
-using [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD licence, in `vendor/`). The review screen shows the converted
-document. Old `.doc` files aren't supported, so save them as `.docx` or PDF. A Word file that only contains a scanned image has no
-text to read, so export it as PDF instead.
+The review screen shows the Word document converted to a web page next to the details. Old `.doc` files aren't supported,
+so save them as `.docx` or PDF.
 
 ## Backups
 **Settings → Backup** downloads all clients, invoices, expenses and settings as JSON. The same button restores them.

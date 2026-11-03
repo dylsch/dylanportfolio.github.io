@@ -1,7 +1,7 @@
 // Accounts (Malta): the pages. Runs entirely in the browser; `store` holds the data.
 import * as malta from './malta.js';
 import * as L from './logic.js';
-import * as claude from './claude.js';
+import * as reader from './reader.js';
 import * as drive from './drive.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -118,7 +118,7 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
     const win = window.open('', '_blank');
     try {
       const blob = await store.getFile(fileId);
-      if (blob.type === claude.DOCX) {   // browsers can't show Word files: download it instead
+      if (blob.type === reader.DOCX) {   // browsers can't show Word files: download it instead
         if (win) win.close();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -583,17 +583,43 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
       } };
   }
 
-  // ---------------------------------------------------------------- Import with Claude
+  // ---------------------------------------------------------------- Import past invoices & receipts
 
-  let apiKey = null;          // loaded on first visit to the Import page
   const running = new Set();  // import ids being read in this tab
   const queue = [];
   const blobs = new Map();    // import id → uploaded file, so it isn't downloaded again
   const STALE_MS = 10 * 60 * 1000;
   let driveStatus = '';       // progress message while files come in from Google Drive
+  let csvPlan = null;         // spreadsheet import waiting for confirmation
 
-  // Store each file, record an import and queue it for Claude. items: [{ blob, name, type, drive_id? }]
-  async function addDocuments(items, autoAdd) {
+  function pump() {
+    while (running.size < 2 && queue.length) {
+      const id = queue.shift();
+      running.add(id);
+      processImport(id).finally(() => { running.delete(id); blobs.delete(id); pump(); });
+    }
+  }
+
+  // Read the document's text and pre-fill a best guess; every document then waits for review.
+  async function processImport(id) {
+    const row = data.imports[id];
+    if (!row) return;
+    try {
+      const blob = blobs.get(id) || await store.getFile(row.file_id);
+      const doc = await reader.readDocument(blob, row.media_type,
+        { settings: S(), clients: L.list(data.clients), expenses: L.list(data.expenses) });
+      const issues = L.problems(doc);
+      const dup = L.duplicateOf(data, doc);
+      if (dup) issues.push(dup);
+      await store.commit([{ set: ['imports', id, { ...data.imports[id], doc, problems: issues, status: 'review', error: '' }] }]);
+    } catch (e) {
+      const msg = e instanceof reader.ReadError ? e.message : `Unexpected error: ${e.message}`;
+      await store.commit([{ set: ['imports', id, { ...data.imports[id], status: 'failed', error: msg }] }]).catch(() => {});
+    }
+  }
+
+  // Store each file, record an import and queue it for reading. items: [{ blob, name, type, drive_id? }]
+  async function addDocuments(items) {
     const skipped = [];
     let queued = 0;
     for (const it of items) {
@@ -601,7 +627,7 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
         const fileId = await store.putFile(it.blob, it.name);
         const id = store.newId();
         const stamp = new Date().toISOString();
-        await store.commit([{ set: ['imports', id, { filename: it.name, file_id: fileId, media_type: it.type, auto_add: autoAdd,
+        await store.commit([{ set: ['imports', id, { filename: it.name, file_id: fileId, media_type: it.type,
           source: it.drive_id ? 'drive' : 'upload', drive_id: it.drive_id || null,
           status: 'processing', problems: [], error: '', created_at: stamp, started_at: stamp }] }]);
         blobs.set(id, it.blob);
@@ -612,7 +638,7 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
     return { queued, skipped };
   }
 
-  async function importFromDrive(autoAdd) {
+  async function importFromDrive() {
     let token;
     try { token = await driveAccess.getToken(); } catch (e) { flash(e.message, 'error'); render(); return; }
     if (!token) return;   // Google window closed
@@ -625,143 +651,124 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
     for (const f of picked) {
       n++;
       if (already.has(f.id)) { skipped.push(`${f.name} (already imported)`); continue; }
-      if (f.size > claude.MAX_FILE_BYTES) { skipped.push(`${f.name} (over 20 MB)`); continue; }
+      if (f.size > reader.MAX_FILE_BYTES) { skipped.push(`${f.name} (over 20 MB)`); continue; }
       driveStatus = `Getting ${n} of ${picked.length} from Google Drive…`; render();
       try {
         const file = await drive.downloadFile(token, f);
-        if (file.blob.size > claude.MAX_FILE_BYTES) { skipped.push(`${f.name} (over 20 MB)`); continue; }
+        if (file.blob.size > reader.MAX_FILE_BYTES) { skipped.push(`${f.name} (over 20 MB)`); continue; }
         items.push({ ...file, drive_id: f.id });
       } catch (e) { skipped.push(`${f.name} (${e.message})`); }
     }
     driveStatus = items.length ? 'Saving…' : ''; render();
-    const res = await addDocuments(items, autoAdd);
+    const res = await addDocuments(items);
     driveStatus = '';
     skipped.push(...res.skipped);
     if (skipped.length) flash(`Skipped: ${skipped.join(', ')}.`, 'error');
-    if (res.queued) flash(`Claude is reading ${res.queued} document(s) from Google Drive. This page updates by itself.`);
+    if (res.queued) flash(`${res.queued} document(s) added from Google Drive. Open each one to check the details.`);
     render();
-  }
-
-  function ownerDescription() {
-    const s = S();
-    return [s.full_name, s.trading_name, s.vat_number, s.id_card].filter(Boolean).join(', ');
-  }
-
-  function pump() {
-    while (running.size < 3 && queue.length) {
-      const id = queue.shift();
-      running.add(id);
-      processImport(id).finally(() => { running.delete(id); blobs.delete(id); pump(); });
-    }
-  }
-
-  async function processImport(id) {
-    const row = data.imports[id];
-    if (!row) return;
-    const fail = msg => store.commit([{ set: ['imports', id, { ...data.imports[id], status: 'failed', error: msg }] }]).catch(() => {});
-    try {
-      if (!apiKey) throw new claude.ExtractionError('Add your Anthropic API key on the Import page first.');
-      const blob = blobs.get(id) || await store.getFile(row.file_id);
-      const doc = await claude.extract(blob, row.media_type, ownerDescription(), apiKey);
-      const issues = L.problems(doc);
-      const dup = L.duplicateOf(data, doc);
-      if (dup) issues.push(dup);
-      const current = { ...data.imports[id], doc, problems: issues };
-      if (current.auto_add && !issues.length) await store.commit(L.documentOps(data, current, doc, store.newId));
-      else await store.commit([{ set: ['imports', id, { ...current, status: 'review' }] }]);
-    } catch (e) {
-      await fail(e instanceof claude.ExtractionError ? e.message : `Unexpected error: ${e.message}`);
-    }
   }
 
   function importPage() {
     const now = Date.now();
     const stale = L.list(data.imports).filter(r => r.status === 'processing' && !running.has(r.id) && now - Date.parse(r.started_at || 0) > STALE_MS);
     if (stale.length) store.commit(stale.map(r => ({ set: ['imports', r.id, { ...r, status: 'failed', error: 'Interrupted – please retry.' }] })));
-    if (apiKey === null) store.getApiKey().then(k => { apiKey = k; if (route().parts[0] === 'import' && !route().parts[1]) render(); }).catch(() => { apiKey = ''; });
     const rows = L.list(data.imports).filter(r => r.status !== 'discarded')
       .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 200);
     const badge = r => r.status === 'processing' ? '<span class="badge sent">reading…</span>'
-      : r.status === 'review' ? '<span class="badge cancelled">needs review</span>'
+      : r.status === 'review' ? '<span class="badge cancelled">to check</span>'
       : r.status === 'imported' ? '<span class="badge paid">added</span>' : '<span class="badge cancelled">failed</span>';
-    const keyBox = apiKey === null ? '<p class="muted">Loading…</p>' : apiKey
-      ? `<p>Anthropic API key saved (ends in <code>${esc(apiKey.slice(-4))}</code>). <button class="link" id="changeKey">Change</button> · <button class="link" id="removeKey">Remove</button></p>`
-      : `<div class="callout">Claude needs an Anthropic API key to read documents. Create one at
-          <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a> and paste it here.
-          It is stored in your private database, readable only when you're signed in.</div>
-        <form class="inline" id="keyForm"><input name="key" type="password" placeholder="sk-ant-..." autocomplete="off" required style="min-width:18rem"><button class="btn">Save key</button></form>`;
+    const p = csvPlan;
+    const csvPreview = p ? `<div class="callout csv-plan">
+        <strong>${p.kind === 'invoices' ? `${p.invoices} invoice(s)` : `${p.expenses} expense(s)`} ready to add from ${esc(p.filename)}</strong>
+        ${p.newClients ? `<br>${p.newClients} new client(s) will be created.` : ''}
+        ${p.skipped.length ? `<p>Skipped:</p><ul>${p.skipped.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+        ${p.errors.length ? `<p>Rows with problems (not added – fix them in the file and import it again):</p><ul class="problems">${p.errors.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+        <p>${p.ops.length ? '<button class="btn" id="csvConfirm">Add them</button> ' : ''}<button class="btn secondary" id="csvCancel">Cancel</button></p>
+      </div>` : '';
     return { title: 'Import', live: true, html: `
       <h1>Import past invoices &amp; receipts</h1>
-      <section class="card">${keyBox}</section>
-      <form class="card upload" id="uploadForm">
-        <label class="drop"><input type="file" name="files" multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif">
-          <span>Choose PDFs, Word documents (.docx) or photos – your own invoices to clients, or bills and receipts from suppliers. You can select many at once.</span></label>
-        <label class="check"><input type="checkbox" name="auto_add" checked>
-          Add straight to my accounts when everything checks out. Anything unclear, duplicated or not adding up waits for you to review.</label>
-        <div class="row-buttons">
-          <button class="btn" ${apiKey ? '' : 'disabled'}>Upload and let Claude read them</button>
-          ${driveAccess ? `<button type="button" class="btn secondary" id="driveBtn" ${apiKey && !driveStatus ? '' : 'disabled'}>
-            <svg viewBox="0 0 87.3 78" aria-hidden="true"><path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"/><path fill="#ea4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"/><path fill="#00832d" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg>
-            Choose from Google Drive</button>` : ''}
-        </div>
-        ${driveStatus ? `<p class="muted">${esc(driveStatus)}</p>` : ''}
-        <p class="hint">Claude works out whether each document is an invoice you issued (added as an invoice, with the client
-          created if new) or a purchase (added as an expense). Amounts are re-checked line by line before anything is saved.
-          From Google Drive you can pick PDFs, Word documents and Google Docs; the app can only read the files you pick.
-          Files are sent to Anthropic for processing and the originals are kept in your private database.
-          Keep this page open while documents are being read.</p>
-      </form>
-      ${rows.length ? `<table class="card"><tr><th>Document</th><th>Status</th><th>What Claude found</th><th></th></tr>
+      <div class="grid2">
+        <section class="card upload">
+          <h2>From documents</h2>
+          <label class="drop"><input type="file" id="docFiles" multiple accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif">
+            <span>Choose PDFs, Word documents (.docx) or photos – your own invoices to clients, or bills and receipts from suppliers.</span></label>
+          <div class="row-buttons">
+            <button class="btn" id="uploadBtn">Upload</button>
+            ${driveAccess ? `<button type="button" class="btn secondary" id="driveBtn" ${driveStatus ? 'disabled' : ''}>
+              <svg viewBox="0 0 87.3 78" aria-hidden="true"><path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"/><path fill="#ea4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"/><path fill="#00832d" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg>
+              Choose from Google Drive</button>` : ''}
+          </div>
+          ${driveStatus ? `<p class="muted">${esc(driveStatus)}</p>` : ''}
+          <p class="hint">The text of PDFs and Word documents is read in your browser – free, and nothing is sent anywhere –
+            and used to fill in the number, dates, client or supplier and totals as a first guess. You then check each one
+            next to the original before it's added. Photos and scanned PDFs have no text, so you type their details in.
+            The originals are kept with the invoice or expense.</p>
+        </section>
+        <section class="card upload">
+          <h2>From a spreadsheet</h2>
+          <p>Already keep a list of past invoices or expenses in Excel or Google Sheets? Copy it into a template,
+            save it as CSV and import everything at once.</p>
+          <p><button class="link" id="tplInv">Invoices template (CSV)</button> · <button class="link" id="tplExp">Expenses template (CSV)</button></p>
+          <label class="drop"><input type="file" id="csvFile" accept=".csv,text/csv">
+            <span>Choose a CSV file. Invoices: one row per line, rows with the same number become one invoice. Dates as DD/MM/YYYY.</span></label>
+          <p class="hint">The CSV downloads on the Invoices and Expenses pages use the same columns, so they can be imported again.
+            Invoice numbers already in your accounts are skipped, and so are expenses with the same date, supplier and amount.</p>
+        </section>
+      </div>
+      ${csvPreview}
+      ${rows.length ? `<table class="card"><tr><th>Document</th><th>Status</th><th>What was found</th><th></th></tr>
         ${rows.map(r => `<tr>
           <td><button class="link" data-open="${esc(r.file_id)}" data-name="${esc(r.filename)}">${esc(r.filename)}</button>${r.source === 'drive' ? '<br><small class="muted">from Google Drive</small>' : ''}</td><td>${badge(r)}</td>
           <td>${r.doc ? `${r.doc.document_type === 'sales_invoice' ? 'Your invoice' : r.doc.document_type === 'purchase' ? 'Purchase' : 'Not an invoice'}
-            ${esc(r.doc.number || '')} · ${esc(r.doc.counterparty?.name)} · ${esc(r.doc.issue_date)} · ${eur(Math.round(Number(r.doc.total_gross || 0) * 100))}
-            ${r.status === 'review' ? `<ul class="problems">${(r.problems || []).map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}`
+            ${esc(r.doc.number || '')}${r.doc.counterparty?.name ? ' · ' + esc(r.doc.counterparty.name) : ''}${r.doc.issue_date ? ' · ' + esc(r.doc.issue_date) : ''}${r.doc.total_gross ? ' · ' + eur(Math.round(Number(r.doc.total_gross) * 100)) : ''}`
             : r.error ? `<span class="muted">${esc(r.error)}</span>` : ''}</td>
           <td class="actions">
-            ${r.status === 'review' ? `<a class="btn" href="#/import/${esc(r.id)}">Review</a>`
+            ${r.status === 'review' ? `<a class="btn" href="#/import/${esc(r.id)}">Check &amp; add</a>`
               : r.status === 'imported' ? `<a href="${r.record_type === 'invoice' ? '#/invoices/' : '#/expenses/'}${esc(r.record_id)}">Open ${esc(r.record_type)}</a>`
               : r.status === 'failed' ? `<button class="link" data-retry="${esc(r.id)}">Retry</button>` : ''}
             ${['review', 'failed'].includes(r.status) ? ` <button class="link" data-discard="${esc(r.id)}">Discard</button>` : ''}
           </td></tr>`).join('')}</table>` : ''}`,
       bind() {
-        const keyForm = document.getElementById('keyForm');
-        if (keyForm) keyForm.onsubmit = async ev => {
-          ev.preventDefault();
-          const k = formValues(ev.target).get('key').trim();
-          if (!k.startsWith('sk-ant-')) { alert('That does not look like an Anthropic API key (they start with sk-ant-).'); return; }
-          try { await store.setApiKey(k); apiKey = k; flash('API key saved.'); } catch (e) { flash('Could not save the key: ' + e.message, 'error'); }
-          render();
-        };
-        const change = document.getElementById('changeKey');
-        if (change) change.onclick = () => { apiKey = ''; render(); };
-        const remove = document.getElementById('removeKey');
-        if (remove) remove.onclick = async () => {
-          if (!confirm('Remove the saved API key?')) return;
-          await store.setApiKey(''); apiKey = ''; flash('API key removed.'); render();
-        };
-        document.getElementById('uploadForm').onsubmit = async ev => {
-          ev.preventDefault();
-          const f = new FormData(ev.target);
-          const files = f.getAll('files').filter(x => x && x.name);
+        document.getElementById('uploadBtn').onclick = async ev => {
+          const files = [...document.getElementById('docFiles').files];
           if (!files.length) { alert('Choose at least one file first.'); return; }
-          const btn = ev.target.querySelector('button');
-          btn.disabled = true; btn.textContent = 'Uploading…';
+          ev.target.disabled = true; ev.target.textContent = 'Uploading…';
           const items = [], bad = [];
           for (const file of files) {
-            const type = claude.MEDIA_TYPES[file.name.split('.').pop().toLowerCase()];
-            if (!type || file.size > claude.MAX_FILE_BYTES) { bad.push(file.name); continue; }
+            const type = reader.MEDIA_TYPES[file.name.split('.').pop().toLowerCase()];
+            if (!type || file.size > reader.MAX_FILE_BYTES) { bad.push(file.name); continue; }
             items.push({ blob: file.type === type ? file : new Blob([file], { type }), name: file.name, type });
           }
-          const { queued, skipped } = await addDocuments(items, f.has('auto_add'));
+          const { queued, skipped } = await addDocuments(items);
           if (bad.length) flash(`Skipped: ${bad.join(', ')}. Use PDF, Word (.docx), PNG, JPG, WEBP or GIF files up to 20 MB.`, 'error');
           if (skipped.length) flash(`Skipped: ${skipped.join(', ')}.`, 'error');
-          if (queued) flash(`Claude is reading ${queued} document(s). This page updates by itself.`);
+          if (queued) flash(`${queued} document(s) added. Open each one to check the details.`);
           render();
         };
-        main.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openFile(b.dataset.open, b.dataset.name));
         const driveBtn = document.getElementById('driveBtn');
-        if (driveBtn) driveBtn.onclick = () => importFromDrive(document.querySelector('#uploadForm [name=auto_add]').checked);
+        if (driveBtn) driveBtn.onclick = () => importFromDrive();
+        document.getElementById('tplInv').onclick = () => download('invoices-template.csv', L.invoiceTemplateCsv());
+        document.getElementById('tplExp').onclick = () => download('expenses-template.csv', L.expenseTemplateCsv());
+        document.getElementById('csvFile').onchange = async ev => {
+          const file = ev.target.files[0];
+          if (!file) return;
+          try {
+            const buf = await file.arrayBuffer();
+            let text = new TextDecoder('utf-8').decode(buf);
+            if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);   // older Excel exports
+            csvPlan = { ...L.planCsvImport(data, text, store.newId), filename: file.name };
+          } catch (e) { csvPlan = null; flash(`${file.name}: ${e.message}`, 'error'); }
+          render();
+        };
+        const confirmBtn = document.getElementById('csvConfirm');
+        if (confirmBtn) confirmBtn.onclick = () => {
+          const plan = csvPlan; csvPlan = null;
+          save(plan.ops, plan.kind === 'invoices' ? `${plan.invoices} invoice(s) added.` : `${plan.expenses} expense(s) added.`,
+            plan.kind === 'invoices' ? '#/invoices' : '#/expenses');
+        };
+        const cancelBtn = document.getElementById('csvCancel');
+        if (cancelBtn) cancelBtn.onclick = () => { csvPlan = null; render(); };
+        main.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openFile(b.dataset.open, b.dataset.name));
         main.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => {
           const r = data.imports[b.dataset.retry];
           await store.commit([{ set: ['imports', r.id, { ...r, status: 'processing', error: '', started_at: new Date().toISOString() }] }]);
@@ -836,6 +843,7 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
     const n2 = v => Number(v || 0).toFixed(2);
     return { title: 'Review import', html: `
       <div class="page-head"><h1>Review: ${esc(row.filename)}</h1><a class="btn secondary" href="#/import">← Back</a></div>
+      <p class="hint">The details were filled in automatically from the document's text as a first guess – check each field against the original.</p>
       ${row.problems?.length ? `<div class="callout"><strong>Please check:</strong><ul>${row.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
       <div class="review">
         <div class="preview card" id="preview"><p class="muted">Loading the original…</p></div>
@@ -863,14 +871,14 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
           <div class="sales">
             <table class="lines"><thead><tr><th>Description</th><th>Qty</th><th>Unit price (€, excl. VAT)</th><th>VAT</th></tr></thead>
               <tbody>${(doc.lines || []).map(lineRow).join('')}${lineRow(null)}</tbody></table>
-            <p class="hint">Printed totals: net €${n2(doc.total_net)} · VAT €${n2(doc.total_vat)} · total €${n2(doc.total_gross)}</p>
+            <p class="hint">Totals found: net €${n2(doc.total_net)} · VAT €${n2(doc.total_vat)} · total €${n2(doc.total_gross)}</p>
           </div>
           <fieldset class="purchase"><legend>Expense</legend>
             <label class="wide">Description<input name="purchase_description" value="${esc((doc.lines || []).map(l => l.description).join('; '))}"></label>
             <label>Total paid incl. VAT (€)<input name="total_gross" value="${n2(doc.total_gross)}"></label>
             <label>VAT included (€)<input name="total_vat" value="${n2(doc.total_vat)}"></label>
             <label>Category<select name="expense_category">${opts(malta.EXPENSE_CATEGORIES.map(c => [c, c]), doc.expense_category)}</select></label>
-            <label>Business use %<input name="business_pct" type="number" min="1" max="100" value="100"></label>
+            <label>Business use %<input name="business_pct" type="number" min="1" max="100" value="${Number(doc.business_pct || 100)}"></label>
           </fieldset>
           <label class="wide">Notes<textarea name="notes" rows="2">${esc(doc.notes)}</textarea></label>
           <p><button class="btn">Save to my accounts</button></p>
@@ -895,8 +903,8 @@ export function startApp(store, user, { signOut, drive: driveAccess } = {}) {
         cleanup.push(() => { gone = true; if (url) URL.revokeObjectURL(url); });
         store.getFile(row.file_id).then(async blob => {
           if (gone) return;
-          if (row.media_type === claude.DOCX) {   // show the Word document as converted HTML, scripts disabled
-            const html = await claude.docxToHtml(blob);
+          if (row.media_type === reader.DOCX) {   // show the Word document as converted HTML, scripts disabled
+            const html = await reader.docxToHtml(blob);
             if (gone) return;
             const frame = document.createElement('iframe');
             frame.title = 'Original document';

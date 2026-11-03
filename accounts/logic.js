@@ -44,7 +44,8 @@ export function addDays(isoDate, days) {
 
 export function parseDate(text, fallback) {
   const t = String(text ?? '').trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t) && !isNaN(new Date(t + 'T12:00:00Z'))) return t;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(t) ? new Date(t + 'T12:00:00Z') : null;
+  if (d && !isNaN(d) && d.toISOString().slice(0, 10) === t) return t;   // rejects e.g. 31 February
   if (fallback === undefined) throw new Error('Please enter a valid date');
   return fallback;
 }
@@ -280,3 +281,174 @@ export function documentOps(data, importRow, doc, newId, clientId = null) {
   ops.push({ set: ['imports', importRow.id, { ...importRow, status: 'imported', record_type: recordType, record_id: recordId, doc }] });
   return ops;
 }
+
+// ---------------------------------------------------------------- Spreadsheet (CSV) import
+//
+// Uses the same columns as the CSV exports, so an export can be imported again. Invoices: one row
+// per invoice line; rows with the same Number form one invoice. Expenses: one row per expense.
+
+export const INVOICE_COLUMNS = ['Number', 'Issue date', 'Due date', 'Status', 'Paid date', 'Client', 'Client VAT no',
+  'Description', 'Qty', 'Unit price', 'VAT treatment', 'Net', 'VAT', 'Gross'];
+export const EXPENSE_COLUMNS = ['Date', 'Supplier', 'Description', 'Category', 'Net', 'VAT', 'Gross', 'Business %',
+  'VAT recoverable', 'Allowable cost', 'Reference'];
+
+export const invoiceTemplateCsv = () => csv([INVOICE_COLUMNS,
+  ['INV-2025-001', '15/01/2025', '14/02/2025', 'paid', '10/02/2025', 'IDEA College', '', 'Lecturing – 20 hours', '20', '40.00', 'exempt', '', '', ''],
+  ['INV-2025-001', '15/01/2025', '14/02/2025', 'paid', '10/02/2025', 'IDEA College', '', 'Dissertation corrections', '3', '60.00', 'exempt', '', '', ''],
+  ['INV-2025-002', '03/03/2025', '', 'sent', '', 'Acme Ltd', 'MT12345678', 'Consulting', '1', '500.00', 'article11', '', '', '']]);
+export const expenseTemplateCsv = () => csv([EXPENSE_COLUMNS,
+  ['05/01/2025', 'GO plc', 'Mobile bill January', 'Phone & internet', '', '', '30.00', '50', 'no', '', 'GO-0001'],
+  ['20/02/2025', 'Scan Computers', 'Laptop', 'Computer & equipment', '', '180.00', '1180.00', '100', 'no', '', 'R-77']]);
+
+// Splits CSV text into rows. Handles quotes, and comma or semicolon separators (Excel in Europe).
+export function parseCsv(text) {
+  text = String(text).replace(/^﻿/, '');
+  const firstLine = text.split(/\r?\n/, 1)[0];
+  const sep = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
+  const rows = [];
+  let row = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === sep) { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += c;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim()));
+}
+
+// Dates as YYYY-MM-DD or day/month/year (/, - or .).
+export function csvDate(text) {
+  const t = String(text || '').trim();
+  if (!t) return '';
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  let y, mo, d;
+  if (m) [, y, mo, d] = m;
+  else if ((m = t.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2}|\d{4})$/))) [, d, mo, y] = m;
+  else throw new Error(`'${t}' is not a date (use DD/MM/YYYY)`);
+  y = Number(y) < 100 ? 2000 + Number(y) : Number(y);
+  const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return parseDate(iso, null) || (() => { throw new Error(`'${t}' is not a real date`); })();
+}
+
+export function csvVatTreatment(text, fallback) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return fallback;
+  if (malta.VAT_TREATMENTS[t]) return t;
+  const byLabel = Object.entries(malta.VAT_TREATMENTS).find(([, v]) => v.label.toLowerCase() === t);
+  if (byLabel) return byLabel[0];
+  if (/^18\s*%?$/.test(t) || t.startsWith('standard')) return 'standard';
+  if (/^7\s*%?$/.test(t)) return 'reduced7';
+  if (/^5\s*%?$/.test(t)) return 'reduced5';
+  if (/^0\s*%?$/.test(t) || t.startsWith('zero')) return 'zero';
+  if (t.includes('reverse')) return 'reverse';
+  if (t.includes('outside')) return 'outside';
+  if (t.includes('exempt') && !t.includes('article')) return 'exempt';
+  if (t.includes('11')) return 'article11';
+  throw new Error(`Unknown VAT treatment '${text}'`);
+}
+
+// Works out what a CSV file would add, without saving anything.
+// Returns { kind, ops, invoices, expenses, newClients, skipped: [..], errors: [..] }.
+export function planCsvImport(data, text, newId) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) throw new Error('The file is empty or has only a header row.');
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const col = name => header.indexOf(name.toLowerCase());
+  const kind = col('number') >= 0 && col('client') >= 0 ? 'invoices' : col('supplier') >= 0 ? 'expenses' : null;
+  if (!kind) throw new Error('Columns not recognised. Download a template and keep its header row.');
+  const get = (r, name) => { const i = col(name); return i >= 0 ? String(r[i] ?? '').trim() : ''; };
+  const settings = settingsOf(data);
+  const ops = [], skipped = [], errors = [];
+  const result = { kind, ops, invoices: 0, expenses: 0, newClients: 0, skipped, errors };
+
+  if (kind === 'invoices') {
+    const groups = new Map();
+    rows.slice(1).forEach((r, i) => {
+      const number = get(r, 'Number');
+      if (!number) { errors.push(`Row ${i + 2}: no invoice number.`); return; }
+      if (!groups.has(number)) groups.set(number, []);
+      groups.get(number).push({ r, row: i + 2 });
+    });
+    const existing = new Set(list(data.invoices).map(i => i.number));
+    const created = [];   // clients added by this import
+    for (const [number, items] of groups) {
+      if (existing.has(number)) { skipped.push(`${number} (already in your accounts)`); continue; }
+      try {
+        const first = items[0].r;
+        const issue = csvDate(get(first, 'Issue date'));
+        if (!issue) throw new Error('no issue date');
+        const name = get(first, 'Client');
+        if (!name) throw new Error('no client');
+        const party = { name, vat_number: normVat(get(first, 'Client VAT no')) };
+        let client = matchClient(data, party) || matchClient({ clients: Object.fromEntries(created.map(c => [c.id, c])) }, party);
+        if (!client) {
+          const v = party.vat_number;
+          client = { id: newId(), name, address: '', email: '', vat_number: v,
+            country: !v || v.startsWith('MT') ? 'MT' : EU_PREFIX.test(v) ? 'EU' : 'NONEU', is_business: true, notes: '' };
+          created.push(client);
+          ops.push({ set: ['clients', client.id, client] });
+          result.newClients++;
+        }
+        const fallback = malta.defaultVatTreatment(settings.vat_registration, client.country, !!client.is_business);
+        const lines = items.map(({ r, row }) => {
+          const description = get(r, 'Description') || 'Services';
+          const q = Number(get(r, 'Qty').replace(',', '.') || 1);
+          if (!isFinite(q) || q === 0) throw new Error(`row ${row}: quantity '${get(r, 'Qty')}' is not a number`);
+          const unitText = get(r, 'Unit price');
+          const unit = unitText ? toCents(unitText) : malta.roundHalfUp(toCents(get(r, 'Net') || get(r, 'Gross')) / q);
+          const vt = csvVatTreatment(get(r, 'VAT treatment'), fallback);
+          const [net, vat] = malta.lineAmounts(q, unit, vt);
+          return { description, quantity: q, unit_price_cents: unit, vat_treatment: vt, net_cents: net, vat_cents: vat };
+        });
+        const paid = csvDate(get(first, 'Paid date'));
+        let status = get(first, 'Status').toLowerCase();
+        if (!INVOICE_STATUSES.includes(status)) status = paid ? 'paid' : 'sent';
+        const due = csvDate(get(first, 'Due date')) || addDays(issue, Number(settings.payment_terms_days || 30));
+        ops.push({ set: ['invoices', newId(), { number, client_id: client.id, issue_date: issue, due_date: due, status,
+          paid_date: status === 'paid' ? (paid || due) : null, notes: '', lines, source_file: null }] });
+        existing.add(number);
+        result.invoices++;
+      } catch (e) { errors.push(`${number} (row ${items[0].row}): ${e.message}`); }
+    }
+  } else {
+    const seen = new Set(list(data.expenses).map(e => `${e.date}|${normName(e.supplier)}|${e.net_cents + e.vat_cents}`));
+    rows.slice(1).forEach((r, i) => {
+      const row = i + 2;
+      try {
+        const date = csvDate(get(r, 'Date'));
+        if (!date) throw new Error('no date');
+        const supplier = get(r, 'Supplier');
+        if (!supplier) throw new Error('no supplier');
+        const vat = toCents(get(r, 'VAT'));
+        const gross = get(r, 'Gross') ? toCents(get(r, 'Gross')) : toCents(get(r, 'Net')) + vat;
+        if (gross <= 0) throw new Error('no amount (fill in Gross)');
+        if (vat > gross) throw new Error('VAT is more than the total');
+        const pct = Number((get(r, 'Business %') || '100').replace('%', '').trim());
+        if (!(Number.isInteger(pct) && pct > 0 && pct <= 100)) throw new Error('Business % must be 1–100');
+        const key = `${date}|${normName(supplier)}|${gross}`;
+        if (seen.has(key)) { skipped.push(`${supplier} ${date} (already recorded)`); return; }
+        seen.add(key);
+        const catText = get(r, 'Category').toLowerCase();
+        const category = malta.EXPENSE_CATEGORIES.find(c => c.toLowerCase() === catText)
+          || malta.EXPENSE_CATEGORIES.find(c => catText && c.toLowerCase().startsWith(catText)) || 'Other';
+        const rec = get(r, 'VAT recoverable').toLowerCase();
+        ops.push({ set: ['expenses', newId(), { date, supplier, description: get(r, 'Description'), category,
+          net_cents: gross - vat, vat_cents: vat, business_pct: pct,
+          vat_recoverable: rec ? ['yes', 'y', 'true', '1'].includes(rec) : settings.vat_registration === 'article10' && vat > 0,
+          reference: get(r, 'Reference'), source_file: null }] });
+        result.expenses++;
+      } catch (e) { errors.push(`Row ${row}: ${e.message}`); }
+    });
+  }
+  return result;
+}
+
+const EU_PREFIX = /^(AT|BE|BG|CY|CZ|DE|DK|EE|EL|GR|ES|FI|FR|HR|HU|IE|IT|LT|LU|LV|NL|PL|PT|RO|SE|SI|SK)/;

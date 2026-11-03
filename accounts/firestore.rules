@@ -12,8 +12,8 @@ service cloud.firestore {
         && request.auth.token.email_verified == true;
     }
 
-    // ledger/{uid} and everything under it: settings, clients, invoices, expenses, imports,
-    // original documents and the Anthropic API key. Only the owner, and only their own ledger.
+    // ledger/{uid} and everything under it: settings, clients, invoices, expenses, imports and
+    // original documents. Only the owner, and only their own ledger.
     match /ledger/{uid} {
       allow read, write: if isOwner(uid);
       match /{document=**} {

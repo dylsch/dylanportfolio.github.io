@@ -5,12 +5,11 @@
 //   ledger/{uid}/clients|invoices|expenses|imports/{id}
 //   ledger/{uid}/files/{id}          { name, type, size, chunks }  original documents,
 //   ledger/{uid}/files/{id}/chunks/{n} { data }                       base64 in ≤700 KB pieces
-//   ledger/{uid}/secrets/anthropic   { key }                          Anthropic API key
 export const COLLECTIONS = ['clients', 'invoices', 'expenses', 'imports'];
 const CHUNK = 700_000; // base64 characters per chunk; Firestore documents max out at 1 MiB
 
 export function firestoreStore(db, fs, uid) {
-  const { doc, collection, onSnapshot, writeBatch, getDoc, getDocs, setDoc, deleteField } = fs;
+  const { doc, collection, onSnapshot, writeBatch, getDoc, getDocs, setDoc } = fs;
   const root = doc(db, 'ledger', uid);
   const data = { settings: {}, clients: {}, invoices: {}, expenses: {}, imports: {} };
   const subs = new Set();
@@ -90,12 +89,10 @@ export function firestoreStore(db, fs, uid) {
       await batch.commit();
     },
 
-    async getApiKey() {
-      const s = await getDoc(doc(root, 'secrets', 'anthropic'));
-      return s.exists() ? s.data().key || '' : '';
-    },
-    async setApiKey(key) {
-      await setDoc(doc(root, 'secrets', 'anthropic'), { key: key || deleteField() }, { merge: true });
+    // The Claude import has been removed: delete an Anthropic API key saved by an earlier version.
+    async removeLegacyApiKey() {
+      const ref = doc(root, 'secrets', 'anthropic');
+      if ((await getDoc(ref)).exists()) await writeBatch(db).delete(ref).commit();
     },
   };
 }

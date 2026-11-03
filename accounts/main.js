@@ -105,6 +105,7 @@ async function run() {
     started = true;
     $('#gate').hidden = true;
     $('#app').hidden = false;
+    store.removeLegacyApiKey().catch(() => {});
     startApp(store, user, { signOut: () => signOut(auth), drive: driveAccess(user) });
   });
 }

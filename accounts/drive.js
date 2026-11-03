@@ -1,7 +1,7 @@
 // Google Drive: pick invoices with Google's own file picker and download them.
 // The app asks only for the `drive.file` permission, so it can read the files you pick in the
 // picker and nothing else in your Drive.
-import { DOCX } from './claude.js';
+import { DOCX } from './reader.js';
 
 const GOOGLE_DOC = 'application/vnd.google-apps.document';
 export const DRIVE_MIME_TYPES = ['application/pdf', DOCX, GOOGLE_DOC];
