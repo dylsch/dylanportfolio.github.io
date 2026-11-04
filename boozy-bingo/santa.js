@@ -258,7 +258,7 @@ window.startBoozySanta = () => {
     const byId = new Map(list.map(e => [e.id, e]));
     if (!result) { toast('😕 No valid draw with these exclusions. Try removing one.'); return; }
     // The pairings are only kept as private per-person entries; the organiser's screen never lists them.
-    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ id: e.id, name: e.name, label: lab(e), email: e.email, token: token(), wish: token(), avail: token(), to: byId.get(result[e.id]).name, toId: result[e.id], seen: false })), online: false, opened: {}, free: {} };
+    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ id: e.id, name: e.name, label: lab(e), email: e.email, token: token(), wish: token(), avail: token(), to: byId.get(result[e.id]).name, toId: result[e.id], seen: false })), online: false, tried: false, opened: {}, free: {} };
     save();
     if (cloud) await publish();
     render();
@@ -284,6 +284,16 @@ window.startBoozySanta = () => {
   }
   async function publish() {
     const d = S.draw, fs = cloud.fs, db = cloud.db;
+    // A failed attempt can leave some pages saved, and the rules (rightly) stop anyone overwriting a
+    // participant's page. The links were never sent, so tidy up and retry with brand-new ids.
+    // (Draws saved before this flag existed count as tried.)
+    if (d.tried !== false && !d.online) {
+      const old = { ...d, online: true, people: d.people.map(p => ({ ...p })) };
+      await unpublish(old);
+      d.id = token(12);
+      d.people.forEach(p => { p.token = token(); p.wish = token(); p.avail = token(); });
+    }
+    d.tried = true; save();
     d.people.forEach(p => { p.avail = p.avail || token(); });
     try {
       await fs.setDoc(fs.doc(db, 'santa', d.id), { hostUid: cloud.user.uid, event: S.event, createdAt: fs.serverTimestamp() });
