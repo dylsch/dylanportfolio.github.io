@@ -47,6 +47,9 @@ window.startBoozySanta = () => {
     delete S.people;
   }
   while (S.list.length < 3) S.list.push({ name: '', email: '' });
+  // People can share a name, so everyone gets a hidden id and everything else refers to that.
+  const ensureIds = () => S.list.forEach(e => { if (!e.id) e.id = token(8); });
+  ensureIds();
   // 'vote': everyone ticks free days in a range and the organiser picks one; 'fixed': the date is already known.
   if (!S.dateMode) S.dateMode = S.date ? 'fixed' : 'vote';
   const range = () => (S.dateMode === 'vote' ? [S.calFrom || '', S.calTo || ''] : ['', '']);
@@ -56,18 +59,34 @@ window.startBoozySanta = () => {
       .filter(p => p.length >= 2).map(p => [p[0], p[1]]);
     delete S.exclusions;
   }
+  // Older saves stored exclusions as names: point them at the first person with that name.
+  if (!S.exclById) {
+    const byName = n => (S.list.find(e => nameKey(e.name || '') === nameKey(n || '')) || {}).id || n;
+    S.excl = S.excl.map(([a, b]) => [a ? byName(a) : '', b ? byName(b) : '']);
+    S.exclById = true;
+  }
   const entries = () => {
-    const seen = new Set();
-    return S.list.map(e => ({ name: (e.name || '').trim().replace(/\s+/g, ' '), email: validEmail((e.email || '').trim()) ? e.email.trim() : '' }))
-      .filter(e => e.name && !seen.has(nameKey(e.name)) && seen.add(nameKey(e.name)));
+    ensureIds();
+    return S.list.map(e => ({ id: e.id, name: (e.name || '').trim().replace(/\s+/g, ' '), email: validEmail((e.email || '').trim()) ? e.email.trim() : '' }))
+      .filter(e => e.name);
   };
   const people = () => entries().map(e => e.name);
+  // Organiser-side labels that tell people with the same name apart: "Anna (anna@x.com)" or "Anna #2".
+  const labeller = list => {
+    const total = {}, seen = {}, out = new Map();
+    list.forEach(e => { const k = nameKey(e.name); total[k] = (total[k] || 0) + 1; });
+    list.forEach(e => {
+      const k = nameKey(e.name); seen[k] = (seen[k] || 0) + 1;
+      out.set(e, total[k] < 2 ? e.name : e.email ? `${e.name} (${e.email})` : `${e.name} #${seen[k]}`);
+    });
+    return e => out.get(e) || e.name;
+  };
   // "Anna & Ben", "Anna, Ben", "Anna - Ben": these two never draw each other (either way round).
-  function exclusions(names) {
-    const known = new Map(names.map(n => [nameKey(n), n])), pairs = [], unknown = [];
+  function exclusions(ids) {
+    const known = new Set(ids), pairs = [], unknown = [];
     S.excl.forEach(([a, b]) => {
       if (!a || !b) return;
-      const x = known.get(nameKey(a)), y = known.get(nameKey(b));
+      const x = known.has(a) && a, y = known.has(b) && b;
       if (!x) unknown.push(a);
       if (!y) unknown.push(b);
       if (x && y && x !== y) pairs.push([x, y]);
@@ -184,10 +203,11 @@ window.startBoozySanta = () => {
       ev.preventDefault();
       const i = Number(inp.dataset.i), rows = text.split(/\r?\n/).map(parseLine).filter(e => e.name);
       S.list.splice(i, S.list[i].name || S.list[i].email ? 0 : 1, ...rows);
-      save(); renderRows(); toast(`Added ${rows.length} people`);
+      ensureIds(); save(); renderRows(); toast(`Added ${rows.length} people`);
     }));
     box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
-      S.list.splice(Number(b.dataset.rm), 1);
+      const [gone] = S.list.splice(Number(b.dataset.rm), 1);
+      S.excl.forEach(pair => pair.forEach((id, k) => { if (id === gone.id) pair[k] = ''; }));
       if (!S.list.length) S.list.push({ name: '', email: '' });
       save(); renderRows();
     });
@@ -197,9 +217,10 @@ window.startBoozySanta = () => {
   function renderExRows() {
     const box = $('#ssExRows');
     if (!box) return;
-    const names = people(), known = new Set(names.map(nameKey));
-    const opts = (cur, other) => `<option value="">Choose…</option>${names.map(n => `<option ${nameKey(n) === nameKey(cur || '') ? 'selected' : ''} ${nameKey(n) === nameKey(other || '') ? 'disabled' : ''}>${esc(n)}</option>`).join('')}
-      ${cur && !known.has(nameKey(cur)) ? `<option selected value="${esc(cur)}">⚠️ ${esc(cur)} (not in the list)</option>` : ''}`;
+    const list = entries(), names = list.map(e => e.name), lab = labeller(list), known = new Set(list.map(e => e.id));
+    const lost = id => { const e = S.list.find(x => x.id === id); return e ? (e.name || '').trim() || 'a person with no name' : id; };
+    const opts = (cur, other) => `<option value="">Choose…</option>${list.map(e => `<option value="${esc(e.id)}" ${e.id === cur ? 'selected' : ''} ${e.id === other ? 'disabled' : ''}>${esc(lab(e))}</option>`).join('')}
+      ${cur && !known.has(cur) ? `<option selected value="${esc(cur)}">⚠️ ${esc(lost(cur))} (not in the list)</option>` : ''}`;
     box.innerHTML = S.excl.length ? S.excl.map(([a, b], i) => `<div class="ssrow ssexrow">
         <select data-x="${i}" data-k="0" aria-label="Exclusion ${i + 1}, first person">${opts(a, b)}</select><span class="hint">&amp;</span>
         <select data-x="${i}" data-k="1" aria-label="Exclusion ${i + 1}, second person">${opts(b, a)}</select>
@@ -211,20 +232,17 @@ window.startBoozySanta = () => {
     if (add) add.disabled = names.length < 2;
   }
   function addRow(at = S.list.length) {
-    S.list.splice(at, 0, { name: '', email: '' });
+    S.list.splice(at, 0, { id: token(8), name: '', email: '' });
     save(); renderRows(at);
   }
   // Count, warnings and the draw button update as you type, without redrawing the inputs.
   function refreshRows() {
-    const names = people(), counts = {};
-    S.list.forEach(e => { const k = nameKey(e.name || ''); if (k) counts[k] = (counts[k] || 0) + 1; });
-    $('#ssRows').querySelectorAll('[data-f]').forEach(inp => {
-      const e = S.list[inp.dataset.i], bad = inp.dataset.f === 'email'
-        ? !!e.email.trim() && !validEmail(e.email.trim())
-        : counts[nameKey(e.name || '')] > 1;
+    const names = people();
+    $('#ssRows').querySelectorAll('[data-f="email"]').forEach(inp => {
+      const e = S.list[inp.dataset.i], bad = !!e.email.trim() && !validEmail(e.email.trim());
       inp.classList.toggle('bad', bad);
       inp.setAttribute('aria-invalid', String(bad));
-      inp.title = bad ? (inp.dataset.f === 'email' ? 'This email doesn\'t look right' : 'This name appears twice') : '';
+      inp.title = bad ? 'This email doesn\'t look right' : '';
     });
     const pill = $('#ssCount');
     pill.textContent = `${names.length} people`;
@@ -235,16 +253,23 @@ window.startBoozySanta = () => {
   }
 
   async function doDraw() {
-    const list = entries(), names = list.map(e => e.name), ex = exclusions(names);
-    const result = drawPairs(names, ex.pairs, S.noSwaps);
+    const list = entries(), ids = list.map(e => e.id), ex = exclusions(ids), lab = labeller(list);
+    const result = drawPairs(ids, ex.pairs, S.noSwaps);
+    const byId = new Map(list.map(e => [e.id, e]));
     if (!result) { toast('😕 No valid draw with these exclusions. Try removing one.'); return; }
     // The pairings are only kept as private per-person entries; the organiser's screen never lists them.
-    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ name: e.name, email: e.email, token: token(), wish: token(), avail: token(), to: result[e.name], seen: false })), online: false, opened: {}, free: {} };
+    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ id: e.id, name: e.name, label: lab(e), email: e.email, token: token(), wish: token(), avail: token(), to: byId.get(result[e.id]).name, toId: result[e.id], seen: false })), online: false, opened: {}, free: {} };
     save();
     if (cloud) await publish();
     render();
     toast('🎁 Names drawn! Nobody knows who got whom… yet.');
   }
+
+  // Who a drawn person buys for, and per-person keys that stay unique even when names repeat.
+  const recipient = (d, p) => d.people.find(q => (p.toId ? q.id === p.toId : q.name === p.to)) || {};
+  const pkey = p => p.token;
+  const plab = p => p.label || p.name;
+  const toLab = (d, p) => { const q = recipient(d, p); return q.label || p.to; };
 
   // ---------- Online: secret links ----------
   const linkFor = p => new URL(`santa.html?d=${S.draw.id}&t=${p.token}`, location.href).href;
@@ -259,14 +284,13 @@ window.startBoozySanta = () => {
   }
   async function publish() {
     const d = S.draw, fs = cloud.fs, db = cloud.db;
-    const wishOf = name => d.people.find(p => p.name === name).wish;
     d.people.forEach(p => { p.avail = p.avail || token(); });
     try {
       await fs.setDoc(fs.doc(db, 'santa', d.id), { hostUid: cloud.user.uid, event: S.event, createdAt: fs.serverTimestamp() });
       await Promise.all(d.people.flatMap(p => [
         fs.setDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token), {
           name: p.name, to: p.to, event: S.event, budget: S.budget, date: S.date, note: S.note,
-          myWish: p.wish, theirWish: wishOf(p.to), myAvail: p.avail, calFrom: range()[0], calTo: range()[1], openedAt: null
+          myWish: p.wish, theirWish: recipient(d, p).wish, myAvail: p.avail, calFrom: range()[0], calTo: range()[1], openedAt: null
         }),
         fs.setDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish), { name: p.name, wishlist: '', wants: [], updatedAt: null }),
         fs.setDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail), { name: p.name, days: [], updatedAt: null })
@@ -301,9 +325,9 @@ window.startBoozySanta = () => {
     if (!d.calReady) { try { await pushDates(); } catch {} }
     d.free = d.free || {};
     await Promise.all(d.people.map(async p => {
-      try { const snap = await fs.getDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token)); d.opened[p.name] = !!(snap.exists() && snap.data().openedAt); } catch {}
+      try { const snap = await fs.getDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token)); d.opened[pkey(p)] = !!(snap.exists() && snap.data().openedAt); } catch {}
       if (p.avail) {
-        try { const a = await fs.getDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail)); if (a.exists()) d.free[p.name] = { days: a.data().days || [], answered: !!a.data().updatedAt }; } catch {}
+        try { const a = await fs.getDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail)); if (a.exists()) d.free[pkey(p)] = { days: a.data().days || [], answered: !!a.data().updatedAt }; } catch {}
       }
     }));
     save(); if ($('#ssLinks') || $('#ssCal')) renderDraw();
@@ -333,7 +357,7 @@ window.startBoozySanta = () => {
     };
     $('#ssPeek').onclick = () => {
       if (!confirm('Show every pairing? This spoils the surprise for you!')) return;
-      $('#ssBody').innerHTML = `<div class="card"><h2>All pairings</h2><div class="lrlist ssall">${d.people.map(p => `<div><span>${esc(p.name)}</span><b>→ ${esc(p.to)}</b></div>`).join('')}</div>
+      $('#ssBody').innerHTML = `<div class="card"><h2>All pairings</h2><div class="lrlist ssall">${d.people.map(p => `<div><span>${esc(plab(p))}</span><b>→ ${esc(toLab(d, p))}</b></div>`).join('')}</div>
         <button class="btn mt" id="ssHide">Hide</button></div>`;
       $('#ssHide').onclick = renderDraw;
     };
@@ -345,13 +369,13 @@ window.startBoozySanta = () => {
         body.innerHTML = `<div class="card"><h2>📱 Private links</h2><p class="hint">This draw was made offline. Create the links now?</p><button class="btn primary" id="ssPublish">Create private links</button></div>`;
         $('#ssPublish').onclick = async () => { await publish(); renderDraw(); };
       } else {
-        const opened = d.people.filter(p => d.opened[p.name]).length;
+        const opened = d.people.filter(p => d.opened[pkey(p)]).length;
         body.innerHTML = `<div class="card" id="ssLinks">
           <div class="row" style="justify-content:space-between"><h2 style="margin:0">📱 Private links</h2>
             <span class="row"><span class="pill ${opened === d.people.length ? 'ok' : 'warn'}">${opened} of ${d.people.length} opened</span><button class="btn" id="ssRefresh">↻ Refresh</button></span></div>
           <p class="hint">Send each person their own invite. <b>✉️ Email</b> opens your email app with the invite ready to send. Their link only shows who <i>they're</i> buying for. There they can add the things they'd like and mark the days they're free.</p>
           <div class="sslinks">${d.people.map((p, i) => `<div class="sslink">
-            <b>${esc(p.name)}${p.email ? `<small class="hint"> · ${esc(p.email)}</small>` : ''}</b>${d.opened[p.name] ? '<span class="pill ok">opened ✓</span>' : '<span class="pill">not opened</span>'}
+            <b>${esc(p.email ? p.name : plab(p))}${p.email ? `<small class="hint"> · ${esc(p.email)}</small>` : ''}</b>${d.opened[pkey(p)] ? '<span class="pill ok">opened ✓</span>' : '<span class="pill">not opened</span>'}
             <span class="row">
               <a class="btn${p.email ? ' primary' : ''}" href="${esc(mailto(p))}">✉️ Email</a>
               <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`🎁 Hi ${p.name}! Your ${S.event} match is ready. Open your private link (just for you!): ${linkFor(p)}`)}">WhatsApp</a>
@@ -367,7 +391,7 @@ window.startBoozySanta = () => {
       }
     } else if (S.method === 'pass') {
       body.innerHTML = `<div class="card"><h2>🖐️ Pass the phone</h2><p class="hint">Hand this device round. Each person taps their own name, checks who they got, and hides it again before passing it on.</p>
-        <div class="packs">${d.people.map((p, i) => `<button class="pack${p.seen ? ' active' : ''}" data-pass="${i}"><span class="pe">${p.seen ? '✅' : '🎁'}</span><b>${esc(p.name)}</b>${p.seen ? '<small>seen</small>' : ''}</button>`).join('')}</div></div>`;
+        <div class="packs">${d.people.map((p, i) => `<button class="pack${p.seen ? ' active' : ''}" data-pass="${i}"><span class="pe">${p.seen ? '✅' : '🎁'}</span><b>${esc(plab(p))}</b>${p.seen ? '<small>seen</small>' : ''}</button>`).join('')}</div></div>`;
       body.querySelectorAll('[data-pass]').forEach(b => b.onclick = () => passReveal(d.people[b.dataset.pass]));
     } else {
       body.innerHTML = `<div class="card"><h2>🖨️ Print slips</h2><p class="hint">Prints one slip per person. Cut along the dashed lines, then fold the striped flap up over the middle so only the person's name shows. Hand each slip to the person named on it.</p>
@@ -397,9 +421,9 @@ window.startBoozySanta = () => {
       return;
     }
     const days = daysBetween(S.calFrom, S.calTo), n = d.people.length, free = d.free || {};
-    const freeOn = day => d.people.filter(p => free[p.name] && free[p.name].days.includes(day)).map(p => p.name);
+    const freeOn = day => d.people.filter(p => free[pkey(p)] && free[pkey(p)].days.includes(day)).map(plab);
     const counts = days.map(day => freeOn(day).length), max = Math.max(0, ...counts);
-    const answered = d.people.filter(p => free[p.name] && free[p.name].answered).length;
+    const answered = d.people.filter(p => free[pkey(p)] && free[pkey(p)].answered).length;
     const label = (day, opts) => new Date(day + 'T12:00').toLocaleDateString(undefined, opts);
     if (selDay && !days.includes(selDay)) selDay = null;
     wrap.innerHTML = `<div class="card" id="ssCal">
@@ -416,7 +440,7 @@ window.startBoozySanta = () => {
           style="--heat:${heat}%;color:${inkFor(heat)}" title="${esc(label(day, { weekday: 'long', day: 'numeric', month: 'long' }))}: ${c} of ${n} free">
           <small>${esc(label(day, { weekday: 'short' }))}</small><b>${esc(label(day, { day: 'numeric', month: 'short' }))}</b><span>${max && c === max ? '⭐ ' : ''}${c}/${n}</span></button>`;
       }).join('')}</div>` : '<p class="pill warn mt">Choose a valid date range.</p>'}
-      ${selDay ? (() => { const who = freeOn(selDay), not = d.people.map(p => p.name).filter(x => !who.includes(x));
+      ${selDay ? (() => { const who = freeOn(selDay), not = d.people.map(plab).filter(x => !who.includes(x));
         return `<div class="ssdaydetail mt"><h3>${esc(label(selDay, { weekday: 'long', day: 'numeric', month: 'long' }))}</h3>
           <p>✅ Free: ${who.length ? who.map(esc).join(', ') : '<span class="hint">nobody yet</span>'}</p>
           ${not.length ? `<p class="hint">Not free or not answered: ${not.map(esc).join(', ')}</p>` : ''}
@@ -491,7 +515,7 @@ window.startBoozySanta = () => {
   function printSlips() {
     const fmtDate = S.date ? new Date(S.date + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
     $('#printArea').innerHTML = `<div class="ssslips">${S.draw.people.map(p => `<div class="ssslip">
-      <div class="ssfront">🎁 ${esc(S.event)}<b>For ${esc(p.name)} only</b></div>
+      <div class="ssfront">🎁 ${esc(S.event)}<b>For ${esc(plab(p))} only</b></div>
       <div class="ssback">You're buying a gift for<b>${esc(p.to)}</b>${S.budget ? `<span>Budget: ${esc(S.budget)}</span>` : ''}${fmtDate ? `<span>Exchange: ${esc(fmtDate)}</span>` : ''}${S.note ? `<span>${esc(S.note)}</span>` : ''}<small>🤫 Keep it secret!</small></div>
       <div class="ssflap"><span>↑ Fold this flap up over the middle to hide the name ↑</span></div>
     </div>`).join('')}</div>`;
