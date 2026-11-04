@@ -84,6 +84,10 @@ body:not(.is-admin) .admin-only { display: none; }
 .lrans.unique { border-color: var(--green); } .lrans.unique .pts { color: var(--green); font-weight: 600; }
 .lrans.shared { border-color: var(--accent); } .lrans.shared .pts { color: var(--accent); font-weight: 600; }
 /* Secret Santa */
+.ssrows { display: grid; gap: 8px; margin-top: 10px; }
+.ssrow { display: grid; grid-template-columns: 1fr 1.3fr auto; gap: 8px; align-items: center; }
+.ssrow input.bad { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+@media (max-width: 480px) { .ssrow { grid-template-columns: 1fr auto; } .ssrow [data-f="email"] { grid-column: 1; } }
 .sslinks { display: grid; gap: 8px; margin-top: 12px; }
 .sslink { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .sslink b { word-break: break-word; }
@@ -162,13 +166,14 @@ section.tab.active { display: block; }
 .card h3 { font-size: 16px; }
 .hint { color: var(--muted); font-size: 13px; }
 label { display: block; font-weight: 500; margin: 12px 0 4px; font-size: 14px; }
-input[type=text], input[type=number], input[type=password], textarea, select {
+input[type=text], input[type=number], input[type=password], input[type=email], input[type=date], textarea, select {
   width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 10px; padding: 9px 11px; font: inherit;
 }
 textarea { min-height: 300px; resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
 textarea.short { min-height: 130px; font-family: inherit; font-size: 14px; }
 input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type=date] { color-scheme: dark; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .row > .grow { flex: 1; min-width: 140px; }
 .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 14px; }

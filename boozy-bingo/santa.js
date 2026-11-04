@@ -19,7 +19,7 @@ window.startBoozySanta = () => {
   };
   const S = Object.assign({
     event: `Secret Santa ${new Date().getFullYear()}`, budget: '€20', date: '', note: '',
-    people: '', exclusions: '', noSwaps: true, draw: null, method: 'links',
+    exclusions: '', noSwaps: true, draw: null, method: 'links',
     calFrom: defaultRange()[0], calTo: defaultRange()[1]
   }, load());
   const daysBetween = (from, to) => {
@@ -37,12 +37,20 @@ window.startBoozySanta = () => {
   // One person per line, optionally with an email: "Anna", "Anna, anna@x.com" or "Anna <anna@x.com>".
   // Emails only ever stay in this browser; they're used to address the invite emails.
   const EMAIL = /^(.*?)[\s,;<]+([^\s<>,;@]+@[^\s<>,;@]+\.[^\s<>,;@]+)>?$/;
+  const parseLine = line => {
+    const l = line.trim().replace(/\s+/g, ' '), m = l.match(EMAIL);
+    return m ? { name: m[1].trim(), email: m[2] } : { name: l, email: '' };
+  };
+  const validEmail = e => /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(e);
+  if (!Array.isArray(S.list)) {
+    S.list = (S.people || '').split('\n').map(parseLine).filter(e => e.name);
+    delete S.people;
+  }
+  while (S.list.length < 3) S.list.push({ name: '', email: '' });
   const entries = () => {
     const seen = new Set();
-    return S.people.split('\n').map(line => {
-      const l = line.trim().replace(/\s+/g, ' '), m = l.match(EMAIL);
-      return m ? { name: m[1].trim(), email: m[2] } : { name: l, email: '' };
-    }).filter(e => e.name && !seen.has(nameKey(e.name)) && seen.add(nameKey(e.name)));
+    return S.list.map(e => ({ name: (e.name || '').trim().replace(/\s+/g, ' '), email: validEmail((e.email || '').trim()) ? e.email.trim() : '' }))
+      .filter(e => e.name && !seen.has(nameKey(e.name)) && seen.add(nameKey(e.name)));
   };
   const people = () => entries().map(e => e.name);
   // "Anna & Ben", "Anna, Ben", "Anna - Ben": these two never draw each other (either way round).
@@ -101,9 +109,10 @@ window.startBoozySanta = () => {
       </div>
       <div>
         <div class="card">
-          <div class="row" style="justify-content:space-between"><h2 style="margin:0">Who's taking part?</h2><span class="pill ${names.length >= 3 ? 'ok' : 'warn'}">${names.length} people</span></div>
-          <p class="hint">One person per line. Add an email after a comma to send them an email invite: <i>Anna, anna@example.com</i>. Emails stay on this device.</p>
-          <textarea class="short" id="ssPeople" placeholder="Anna, anna@example.com&#10;Ben, ben@example.com&#10;Clara&#10;Daniel">${esc(S.people)}</textarea>
+          <div class="row" style="justify-content:space-between"><h2 style="margin:0">Who's taking part?</h2><span class="pill" id="ssCount"></span></div>
+          <p class="hint">Add an email to send that person an email invite. Emails stay on this device. Tip: paste a list of names, one per line, into a name box to add them all at once.</p>
+          <div class="ssrows" id="ssRows"></div>
+          <button class="btn mt" id="ssAdd">＋ Add person</button>
         </div>
         <div class="card">
           <h2>Exclusions (optional)</h2>
@@ -117,12 +126,71 @@ window.startBoozySanta = () => {
       <span class="hint">${names.length >= 3 ? '' : 'You need at least 3 people.'}</span></div>`;
     const read = () => {
       S.event = $('#ssEvent').value.trim() || 'Secret Santa'; S.budget = $('#ssBudget').value.trim(); S.date = $('#ssDate').value;
-      S.note = $('#ssNote').value.trim(); S.noSwaps = $('#ssSwaps').checked; S.people = $('#ssPeople').value; S.exclusions = $('#ssEx').value;
+      S.note = $('#ssNote').value.trim(); S.noSwaps = $('#ssSwaps').checked; S.exclusions = $('#ssEx').value;
       S.calFrom = $('#ssFrom').value; S.calTo = $('#ssTo').value;
       save();
     };
-    host.querySelectorAll('input, textarea').forEach(el => el.addEventListener('change', () => { read(); render(); }));
+    host.querySelectorAll('input:not([data-f]), textarea').forEach(el => el.addEventListener('change', () => { read(); render(); }));
     $('#ssDraw').onclick = async () => { read(); await doDraw(); };
+    $('#ssAdd').onclick = () => addRow();
+    renderRows();
+  }
+
+  // ---------- Participant rows ----------
+  function renderRows(focus) {
+    const box = $('#ssRows');
+    box.innerHTML = S.list.map((e, i) => `<div class="ssrow">
+      <input type="text" data-f="name" data-i="${i}" maxlength="40" value="${esc(e.name)}" placeholder="Name" aria-label="Name ${i + 1}">
+      <input type="email" data-f="email" data-i="${i}" maxlength="120" value="${esc(e.email)}" placeholder="Email (optional)" aria-label="Email ${i + 1}">
+      <button class="lvkick" data-rm="${i}" aria-label="Remove person ${i + 1}" title="Remove">✕</button></div>`).join('');
+    box.querySelectorAll('[data-f]').forEach(inp => {
+      inp.addEventListener('input', () => { S.list[inp.dataset.i][inp.dataset.f] = inp.value; save(); refreshRows(); });
+      inp.addEventListener('keydown', ev => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        const i = Number(inp.dataset.i);
+        if (inp.dataset.f === 'name') return box.querySelector(`[data-f="email"][data-i="${i}"]`).focus();
+        addRow(i + 1);
+      });
+    });
+    // Pasting several lines into a name box adds one person per line ("Anna, anna@x.com" works too).
+    box.querySelectorAll('[data-f="name"]').forEach(inp => inp.addEventListener('paste', ev => {
+      const text = (ev.clipboardData || window.clipboardData).getData('text');
+      if (!/\n/.test(text.trim())) return;
+      ev.preventDefault();
+      const i = Number(inp.dataset.i), rows = text.split(/\r?\n/).map(parseLine).filter(e => e.name);
+      S.list.splice(i, S.list[i].name || S.list[i].email ? 0 : 1, ...rows);
+      save(); renderRows(); toast(`Added ${rows.length} people`);
+    }));
+    box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+      S.list.splice(Number(b.dataset.rm), 1);
+      if (!S.list.length) S.list.push({ name: '', email: '' });
+      save(); renderRows();
+    });
+    refreshRows();
+    if (focus !== undefined) { const f = box.querySelector(`[data-f="name"][data-i="${focus}"]`); if (f) f.focus(); }
+  }
+  function addRow(at = S.list.length) {
+    S.list.splice(at, 0, { name: '', email: '' });
+    save(); renderRows(at);
+  }
+  // Count, warnings and the draw button update as you type, without redrawing the inputs.
+  function refreshRows() {
+    const names = people(), counts = {};
+    S.list.forEach(e => { const k = nameKey(e.name || ''); if (k) counts[k] = (counts[k] || 0) + 1; });
+    $('#ssRows').querySelectorAll('[data-f]').forEach(inp => {
+      const e = S.list[inp.dataset.i], bad = inp.dataset.f === 'email'
+        ? !!e.email.trim() && !validEmail(e.email.trim())
+        : counts[nameKey(e.name || '')] > 1;
+      inp.classList.toggle('bad', bad);
+      inp.setAttribute('aria-invalid', String(bad));
+      inp.title = bad ? (inp.dataset.f === 'email' ? 'This email doesn\'t look right' : 'This name appears twice') : '';
+    });
+    const pill = $('#ssCount');
+    pill.textContent = `${names.length} people`;
+    pill.className = 'pill ' + (names.length >= 3 ? 'ok' : 'warn');
+    $('#ssDraw').disabled = names.length < 3;
+    $('#ssDraw').nextElementSibling.textContent = names.length >= 3 ? '' : 'You need at least 3 people.';
   }
 
   async function doDraw() {
