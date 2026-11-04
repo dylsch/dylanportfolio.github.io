@@ -85,6 +85,12 @@ body:not(.is-admin) .admin-only { display: none; }
 .lrans.shared { border-color: var(--accent); } .lrans.shared .pts { color: var(--accent); font-weight: 600; }
 /* Secret Santa */
 .ssrows { display: grid; gap: 8px; margin-top: 10px; }
+.ssrow.ssexrow { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; }
+.ssdates { border: 1px solid var(--line); border-radius: 12px; padding: 4px 14px 12px; margin: 14px 0 0; }
+.ssdates legend { font-weight: 500; font-size: 14px; padding: 0 6px; }
+.ssdates .check { margin-top: 8px; }
+.ssindent { margin: 6px 0 4px 26px; }
+.ssindent .hint { margin: 0 0 6px; }
 .ssrow { display: grid; grid-template-columns: 1fr 1.3fr auto; gap: 8px; align-items: center; }
 .ssrow input.bad { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 @media (max-width: 480px) { .ssrow { grid-template-columns: 1fr auto; } .ssrow [data-f="email"] { grid-column: 1; } }

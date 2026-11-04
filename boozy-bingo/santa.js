@@ -19,7 +19,7 @@ window.startBoozySanta = () => {
   };
   const S = Object.assign({
     event: `Secret Santa ${new Date().getFullYear()}`, budget: '€20', date: '', note: '',
-    exclusions: '', noSwaps: true, draw: null, method: 'links',
+    noSwaps: true, draw: null, method: 'links',
     calFrom: defaultRange()[0], calTo: defaultRange()[1]
   }, load());
   const daysBetween = (from, to) => {
@@ -47,6 +47,15 @@ window.startBoozySanta = () => {
     delete S.people;
   }
   while (S.list.length < 3) S.list.push({ name: '', email: '' });
+  // 'vote': everyone ticks free days in a range and the organiser picks one; 'fixed': the date is already known.
+  if (!S.dateMode) S.dateMode = S.date ? 'fixed' : 'vote';
+  const range = () => (S.dateMode === 'vote' ? [S.calFrom || '', S.calTo || ''] : ['', '']);
+  // Exclusions are pairs of names picked from the participants.
+  if (!Array.isArray(S.excl)) {
+    S.excl = (S.exclusions || '').split('\n').map(l => l.split(/\s*(?:&|,|\+|\/|\band\b|\s-\s)\s*/i).map(s => s.trim()).filter(Boolean))
+      .filter(p => p.length >= 2).map(p => [p[0], p[1]]);
+    delete S.exclusions;
+  }
   const entries = () => {
     const seen = new Set();
     return S.list.map(e => ({ name: (e.name || '').trim().replace(/\s+/g, ' '), email: validEmail((e.email || '').trim()) ? e.email.trim() : '' }))
@@ -56,14 +65,14 @@ window.startBoozySanta = () => {
   // "Anna & Ben", "Anna, Ben", "Anna - Ben": these two never draw each other (either way round).
   function exclusions(names) {
     const known = new Map(names.map(n => [nameKey(n), n])), pairs = [], unknown = [];
-    S.exclusions.split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
-      const parts = line.split(/\s*(?:&|,|\+|\/|\band\b|\s-\s)\s*/i).map(s => s.trim()).filter(Boolean);
-      const found = parts.map(p => known.get(nameKey(p)));
-      parts.forEach((p, i) => { if (!found[i]) unknown.push(p); });
-      const ok = found.filter(Boolean);
-      for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length; j++) pairs.push([ok[i], ok[j]]);
+    S.excl.forEach(([a, b]) => {
+      if (!a || !b) return;
+      const x = known.get(nameKey(a)), y = known.get(nameKey(b));
+      if (!x) unknown.push(a);
+      if (!y) unknown.push(b);
+      if (x && y && x !== y) pairs.push([x, y]);
     });
-    return { pairs, unknown };
+    return { pairs, unknown: [...new Set(unknown)] };
   }
   // Backtracking search over a shuffled order: everyone gives to exactly one other person.
   function drawPairs(names, pairs, noSwaps) {
@@ -90,7 +99,7 @@ window.startBoozySanta = () => {
   // ---------- Setup ----------
   function render() {
     if (S.draw) return renderDraw();
-    const names = people(), ex = exclusions(names);
+    const names = people();
     host.innerHTML = `<div class="grid2">
       <div class="card">
         <h2>🎁 Secret Santa</h2>
@@ -98,11 +107,20 @@ window.startBoozySanta = () => {
         <div class="fields">
           <div style="grid-column:1/-1"><label for="ssEvent">Event name</label><input type="text" id="ssEvent" value="${esc(S.event)}"></div>
           <div><label for="ssBudget">Budget</label><input type="text" id="ssBudget" value="${esc(S.budget)}" placeholder="€20"></div>
-          <div><label for="ssDate">Gift exchange date</label><input type="date" id="ssDate" value="${esc(S.date)}"></div>
         </div>
-        <label>Possible dates for the get-together</label>
-        <div class="row"><input type="date" id="ssFrom" value="${esc(S.calFrom)}" style="width:auto" aria-label="From"><span class="hint">to</span><input type="date" id="ssTo" value="${esc(S.calTo)}" style="width:auto" aria-label="To"></div>
-        <p class="hint">Everyone marks the days they're free on their private page, and you pick the best one. Leave the exchange date empty until then.</p>
+        <fieldset class="ssdates">
+          <legend>When is the gift exchange?</legend>
+          <label class="check"><input type="radio" name="ssMode" value="vote" ${S.dateMode === 'vote' ? 'checked' : ''}> Let everyone vote</label>
+          ${S.dateMode === 'vote' ? `<div class="ssindent">
+            <p class="hint">Everyone ticks the days they're free on their private page, between these dates. You'll then see which day suits most people and pick it.</p>
+            <div class="row"><input type="date" id="ssFrom" value="${esc(S.calFrom)}" style="width:auto" aria-label="Possible dates from"><span class="hint">to</span><input type="date" id="ssTo" value="${esc(S.calTo)}" style="width:auto" aria-label="Possible dates to"></div>
+          </div>` : ''}
+          <label class="check"><input type="radio" name="ssMode" value="fixed" ${S.dateMode === 'fixed' ? 'checked' : ''}> The date is already set</label>
+          ${S.dateMode === 'fixed' ? `<div class="ssindent row">
+            <input type="date" id="ssDate" value="${esc(S.date)}" style="width:auto" aria-label="Gift exchange date">
+            ${S.date ? '<button class="btn" id="ssDateClear" type="button">Clear</button>' : '<span class="hint">Not chosen yet</span>'}
+          </div>` : ''}
+        </fieldset>
         <label for="ssNote">Note for everyone (optional)</label>
         <input type="text" id="ssNote" maxlength="200" value="${esc(S.note)}" placeholder="e.g. Bring your gift wrapped to the office party">
         <label class="check"><input type="checkbox" id="ssSwaps" ${S.noSwaps ? 'checked' : ''}> Don't let two people simply buy for each other</label>
@@ -116,21 +134,27 @@ window.startBoozySanta = () => {
         </div>
         <div class="card">
           <h2>Exclusions (optional)</h2>
-          <p class="hint">People who shouldn't draw each other, like couples or housemates. One pair per line, e.g. <i>Anna &amp; Ben</i>.</p>
-          <textarea class="short" id="ssEx" style="min-height:90px" placeholder="Anna & Ben">${esc(S.exclusions)}</textarea>
-          ${ex.unknown.length ? `<p class="pill warn mt">Not in the list: ${ex.unknown.map(esc).join(', ')}</p>` : ''}
+          <p class="hint">Pairs who shouldn't draw each other, like couples or housemates. Pick them from the people above.</p>
+          <div class="ssrows" id="ssExRows"></div>
+          <button class="btn mt" id="ssExAdd">＋ Add exclusion</button>
         </div>
       </div>
     </div>
     <div class="row mt"><button class="btn primary" id="ssDraw" ${names.length >= 3 ? '' : 'disabled'}>🎲 Draw names</button>
       <span class="hint">${names.length >= 3 ? '' : 'You need at least 3 people.'}</span></div>`;
     const read = () => {
-      S.event = $('#ssEvent').value.trim() || 'Secret Santa'; S.budget = $('#ssBudget').value.trim(); S.date = $('#ssDate').value;
-      S.note = $('#ssNote').value.trim(); S.noSwaps = $('#ssSwaps').checked; S.exclusions = $('#ssEx').value;
-      S.calFrom = $('#ssFrom').value; S.calTo = $('#ssTo').value;
+      S.event = $('#ssEvent').value.trim() || 'Secret Santa'; S.budget = $('#ssBudget').value.trim();
+      S.note = $('#ssNote').value.trim(); S.noSwaps = $('#ssSwaps').checked;
+      S.dateMode = host.querySelector('[name="ssMode"]:checked').value;
+      if ($('#ssFrom')) { S.calFrom = $('#ssFrom').value; S.calTo = $('#ssTo').value; }
+      // Voting means no date until the organiser picks one from everyone's answers.
+      S.date = S.dateMode === 'fixed' && $('#ssDate') ? $('#ssDate').value : S.dateMode === 'fixed' ? S.date : '';
       save();
     };
     host.querySelectorAll('input:not([data-f]), textarea').forEach(el => el.addEventListener('change', () => { read(); render(); }));
+    const clr = $('#ssDateClear');
+    if (clr) clr.onclick = () => { S.date = ''; save(); render(); };
+    $('#ssExAdd').onclick = () => { S.excl.push(['', '']); save(); renderExRows(); };
     $('#ssDraw').onclick = async () => { read(); await doDraw(); };
     $('#ssAdd').onclick = () => addRow();
     renderRows();
@@ -170,6 +194,22 @@ window.startBoozySanta = () => {
     refreshRows();
     if (focus !== undefined) { const f = box.querySelector(`[data-f="name"][data-i="${focus}"]`); if (f) f.focus(); }
   }
+  function renderExRows() {
+    const box = $('#ssExRows');
+    if (!box) return;
+    const names = people(), known = new Set(names.map(nameKey));
+    const opts = (cur, other) => `<option value="">Choose…</option>${names.map(n => `<option ${nameKey(n) === nameKey(cur || '') ? 'selected' : ''} ${nameKey(n) === nameKey(other || '') ? 'disabled' : ''}>${esc(n)}</option>`).join('')}
+      ${cur && !known.has(nameKey(cur)) ? `<option selected value="${esc(cur)}">⚠️ ${esc(cur)} (not in the list)</option>` : ''}`;
+    box.innerHTML = S.excl.length ? S.excl.map(([a, b], i) => `<div class="ssrow ssexrow">
+        <select data-x="${i}" data-k="0" aria-label="Exclusion ${i + 1}, first person">${opts(a, b)}</select><span class="hint">&amp;</span>
+        <select data-x="${i}" data-k="1" aria-label="Exclusion ${i + 1}, second person">${opts(b, a)}</select>
+        <button class="lvkick" data-xrm="${i}" aria-label="Remove exclusion ${i + 1}" title="Remove">✕</button></div>`).join('')
+      : '<p class="hint" style="margin:0">No exclusions. Anyone can draw anyone.</p>';
+    box.querySelectorAll('select').forEach(sel => sel.onchange = () => { S.excl[sel.dataset.x][sel.dataset.k] = sel.value; save(); renderExRows(); });
+    box.querySelectorAll('[data-xrm]').forEach(b => b.onclick = () => { S.excl.splice(Number(b.dataset.xrm), 1); save(); renderExRows(); });
+    const add = $('#ssExAdd');
+    if (add) add.disabled = names.length < 2;
+  }
   function addRow(at = S.list.length) {
     S.list.splice(at, 0, { name: '', email: '' });
     save(); renderRows(at);
@@ -190,6 +230,7 @@ window.startBoozySanta = () => {
     pill.textContent = `${names.length} people`;
     pill.className = 'pill ' + (names.length >= 3 ? 'ok' : 'warn');
     $('#ssDraw').disabled = names.length < 3;
+    if (!document.activeElement || !document.activeElement.matches('#ssExRows select')) renderExRows();
     $('#ssDraw').nextElementSibling.textContent = names.length >= 3 ? '' : 'You need at least 3 people.';
   }
 
@@ -225,7 +266,7 @@ window.startBoozySanta = () => {
       await Promise.all(d.people.flatMap(p => [
         fs.setDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token), {
           name: p.name, to: p.to, event: S.event, budget: S.budget, date: S.date, note: S.note,
-          myWish: p.wish, theirWish: wishOf(p.to), myAvail: p.avail, calFrom: S.calFrom || '', calTo: S.calTo || '', openedAt: null
+          myWish: p.wish, theirWish: wishOf(p.to), myAvail: p.avail, calFrom: range()[0], calTo: range()[1], openedAt: null
         }),
         fs.setDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish), { name: p.name, wishlist: '', wants: [], updatedAt: null }),
         fs.setDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail), { name: p.name, days: [], updatedAt: null })
@@ -241,7 +282,7 @@ window.startBoozySanta = () => {
     d.people.forEach(p => { p.avail = p.avail || token(); });
     await Promise.all(fresh.map(p => fs.setDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail), { name: p.name, days: [], updatedAt: null }, { merge: true })));
     await Promise.all(d.people.map(p => fs.updateDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token),
-      { date: S.date || '', calFrom: S.calFrom || '', calTo: S.calTo || '', myAvail: p.avail })));
+      { date: S.date || '', calFrom: range()[0], calTo: range()[1], myAvail: p.avail })));
     d.calReady = true; save();
   }
   async function unpublish(d) {
@@ -349,7 +390,12 @@ window.startBoozySanta = () => {
   }
   function renderCalendar() {
     const wrap = $('#ssCalWrap'), d = S.draw;
-    if (!wrap || !cloud || !d.online) { if (wrap) wrap.innerHTML = ''; return; }
+    if (!wrap) return;
+    if (S.dateMode === 'fixed') return renderFixedDate(wrap);
+    if (!cloud || !d.online) {
+      wrap.innerHTML = '<div class="card"><h2>📅 When is everyone free?</h2><p class="hint">Voting on a date happens on everyone\'s private page, so it needs the online version of Party Games, signed in with Google.</p></div>';
+      return;
+    }
     const days = daysBetween(S.calFrom, S.calTo), n = d.people.length, free = d.free || {};
     const freeOn = day => d.people.filter(p => free[p.name] && free[p.name].days.includes(day)).map(p => p.name);
     const counts = days.map(day => freeOn(day).length), max = Math.max(0, ...counts);
@@ -361,7 +407,8 @@ window.startBoozySanta = () => {
         <span class="row"><span class="pill ${answered === n ? 'ok' : 'warn'}">${answered} of ${n} answered</span><button class="btn" id="ssCalRefresh">↻ Refresh</button></span></div>
       <p class="hint">Everyone ticks the days they're free on their private page. The darker the day, the more people can make it. Tap a day to see who's free and set it as the exchange date.</p>
       <div class="row"><input type="date" id="ssCalFrom" value="${esc(S.calFrom)}" style="width:auto" aria-label="Possible dates from"><span class="hint">to</span>
-        <input type="date" id="ssCalTo" value="${esc(S.calTo)}" style="width:auto" aria-label="Possible dates to"><button class="btn" id="ssCalSave">Update dates</button></div>
+        <input type="date" id="ssCalTo" value="${esc(S.calTo)}" style="width:auto" aria-label="Possible dates to"><button class="btn" id="ssCalSave">Update dates</button>
+        <button class="btn" id="ssToFixed" title="Skip the vote and enter the date yourself">The date is already set</button></div>
       ${days.length ? `<div class="sscal">${days.map((day, i) => {
         const c = counts[i], pct = n ? Math.round(100 * c / n) : 0;
         const heat = c ? 12 + Math.round(70 * c / n) : 0;
@@ -376,6 +423,7 @@ window.startBoozySanta = () => {
           ${selDay === S.date ? '<p class="pill ok">📌 This is the exchange date</p>' : `<button class="btn primary" id="ssPick">📌 Make this the exchange date</button>`}</div>`; })() : ''}
     </div>`;
     $('#ssCalRefresh').onclick = refreshOpened;
+    $('#ssToFixed').onclick = () => setMode('fixed');
     wrap.querySelectorAll('[data-day]').forEach(b => b.onclick = () => { selDay = b.dataset.day === selDay ? null : b.dataset.day; renderCalendar(); });
     $('#ssCalSave').onclick = async () => {
       S.calFrom = $('#ssCalFrom').value; S.calTo = $('#ssCalTo').value; save();
@@ -388,6 +436,31 @@ window.startBoozySanta = () => {
       try { await pushDates(); toast(`📌 Exchange date set: ${label(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}`); } catch (e) { toast('⚠️ ' + e.message); }
       renderDraw();
     };
+  }
+
+  // The date is already known: show it, let the organiser change or clear it, or switch to a vote.
+  function renderFixedDate(wrap) {
+    const nice = S.date ? new Date(S.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    wrap.innerHTML = `<div class="card"><h2>📅 Gift exchange date</h2>
+      <p class="hint">${S.date ? `Everyone sees <b>${esc(nice)}</b> on their page.` : 'No date yet. Set it here, or let everyone vote on the days they\'re free.'}</p>
+      <div class="row"><input type="date" id="ssFixDate" value="${esc(S.date)}" style="width:auto" aria-label="Gift exchange date">
+        <button class="btn primary" id="ssFixSave">Save date</button>${S.date ? '<button class="btn" id="ssFixClear">Clear</button>' : ''}
+        <button class="btn" id="ssToVote">Let everyone vote instead</button></div></div>`;
+    const apply = async date => {
+      S.date = date; save();
+      if (cloud && S.draw.online) { try { await pushDates(); toast(date ? '📌 Date updated on everyone\'s page' : 'Date cleared'); } catch (e) { toast('⚠️ ' + e.message); } }
+      renderDraw();
+    };
+    $('#ssFixSave').onclick = () => apply($('#ssFixDate').value);
+    if ($('#ssFixClear')) $('#ssFixClear').onclick = () => apply('');
+    $('#ssToVote').onclick = () => setMode('vote');
+  }
+  async function setMode(mode) {
+    S.dateMode = mode;
+    if (mode === 'vote') { S.date = ''; if (!S.calFrom || !S.calTo) [S.calFrom, S.calTo] = defaultRange(); }
+    save();
+    if (cloud && S.draw && S.draw.online) { try { await pushDates(); } catch (e) { toast('⚠️ ' + e.message); } }
+    renderDraw();
   }
 
   function overlay(html) {
