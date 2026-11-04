@@ -82,18 +82,31 @@ service cloud.firestore {
         allow get: if true;
         allow list: if false;
         allow create, delete: if isOrganiser();
-        // The participant may only stamp the moment they first opened their match.
-        allow update: if resource.data.openedAt == null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['openedAt'])
-          && request.resource.data.openedAt == request.time;
+        // The organiser can update dates; the participant may only stamp when they first opened it.
+        allow update: if isOrganiser()
+          || (resource.data.openedAt == null
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['openedAt'])
+              && request.resource.data.openedAt == request.time);
       }
       match /wishes/{wishId} {
         allow get: if true;
         allow list: if false;
         allow create, delete: if isOrganiser();
-        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist', 'updatedAt'])
-          && request.resource.data.wishlist is string
-          && request.resource.data.wishlist.size() <= 1000
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist', 'wants', 'updatedAt'])
+          && request.resource.data.get('wishlist', '') is string
+          && request.resource.data.get('wishlist', '').size() <= 1000
+          && request.resource.data.get('wants', []) is list
+          && request.resource.data.get('wants', []).size() <= 20
+          && request.resource.data.updatedAt == request.time;
+      }
+      // avail/{id}: the days each person is free, read and written with the id in their private link.
+      match /avail/{availId} {
+        allow get: if true;
+        allow list: if false;
+        allow create, delete: if isOrganiser();
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['days', 'updatedAt'])
+          && request.resource.data.days is list
+          && request.resource.data.days.size() <= 120
           && request.resource.data.updatedAt == request.time;
       }
     }
