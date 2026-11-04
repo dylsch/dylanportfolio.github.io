@@ -36,10 +36,26 @@ header span { color: var(--accent); }
 .facts { display: grid; gap: 6px; margin: 12px 0 4px; }
 .facts div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
 .wish { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-textarea { width: 100%; min-height: 120px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; resize: vertical; }
-textarea:focus, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type=text], input[type=url] { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; font: inherit; }
+input:focus, .btn:focus-visible, .day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .mt { margin-top: 12px; }
+.wants { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.wants li { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.wants li span { flex: 1; word-break: break-word; }
+.wants a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.wants button { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; padding: 2px 6px; }
+.addwant { display: grid; gap: 8px; margin-top: 10px; }
+.month { margin-top: 12px; }
+.month h4 { font: 600 15px Fredoka, sans-serif; margin: 0 0 6px; }
+.grid7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.grid7 .dow { text-align: center; color: var(--muted); font-size: 12px; }
+.day { aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 600 15px Inter, sans-serif; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.day.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.day.on::after { content: "✓"; font-size: 10px; display: block; line-height: 0; margin-top: -6px; }
+.day.chosen { box-shadow: 0 0 0 2px var(--green); }
+.day:disabled { opacity: .25; cursor: default; }
+.banner { background: color-mix(in srgb, var(--green) 15%, transparent); border: 1px solid var(--green); border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -58,6 +74,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const view = $('#view');
 const q = new URLSearchParams(location.search), drawId = q.get('d'), tok = q.get('t');
 const screen = (icon, title, text) => { view.innerHTML = `<div class="card center"><div style="font-size:48px">${icon}</div><h2>${title}</h2><p class="hint">${text}</p></div>`; };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const nice = (day, opts = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(day + 'T12:00').toLocaleDateString(undefined, opts);
+// Only real web links become clickable.
+const safeLink = u => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } };
 
 if (!drawId || !tok) screen('🔗', 'Link incomplete', 'Open the full link from your invite.');
 else main().catch(e => screen('📡', "Couldn't load your match", esc(e.message || e) + '. Check your connection and refresh.'));
@@ -69,7 +89,6 @@ async function main() {
   const snap = await fs.getDoc(ref);
   if (!snap.exists()) return screen('🎄', 'This link has expired', 'The organiser may have redrawn the names. Ask them for your new link.');
   const r = snap.data();
-  const fmtDate = r.date ? new Date(r.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : '';
   document.title = `${r.event} · Secret Santa`;
 
   view.innerHTML = `<div class="card center">
@@ -87,35 +106,104 @@ async function main() {
     view.innerHTML = `<div class="card center">
         <p class="hint">${esc(r.name)}, you're buying a gift for…</p>
         <div class="name">${esc(r.to)}</div>
-        <div class="facts">${r.budget ? `<div>💶 Budget: <b>${esc(r.budget)}</b></div>` : ''}${fmtDate ? `<div>📅 Gift exchange: <b>${esc(fmtDate)}</b></div>` : ''}${r.note ? `<div>📝 ${esc(r.note)}</div>` : ''}</div>
+        <div class="facts">${r.budget ? `<div>💶 Budget: <b>${esc(r.budget)}</b></div>` : ''}${r.date ? `<div>📅 Gift exchange: <b>${esc(nice(r.date))}</b></div>` : ''}${r.note ? `<div>📝 ${esc(r.note)}</div>` : ''}</div>
         <p class="hint">🤫 Keep it secret!</p>
         <button class="btn" id="hide">Hide name</button>
       </div>
-      <div class="card"><h3>🎄 ${esc(r.to)}'s wishlist</h3><div id="theirWish" class="hint">Loading…</div></div>
-      <div class="card"><h3>✍️ Your wishlist</h3>
-        <p class="hint">Give your own Secret Santa some ideas. They'll see this on their page.</p>
-        <textarea id="myWish" maxlength="1000" placeholder="e.g. Books, plants for my balcony, anything chocolate…"></textarea>
-        <div class="row mt"><button class="btn primary" id="saveWish">Save wishlist</button><span class="hint" id="saved"></span></div>
-      </div>`;
+      <div class="card"><h3>🎄 What ${esc(r.to)} would like</h3><div id="theirWants" class="hint">Loading…</div></div>
+      <div class="card"><h3>✍️ What would you like?</h3>
+        <p class="hint">Add a few ideas for your own Secret Santa, with a link if you like. They'll see this list on their page.</p>
+        <ul class="wants" id="myWants"></ul>
+        <div class="addwant">
+          <input type="text" id="wantItem" maxlength="80" placeholder="e.g. A cookbook, a plant for my balcony…" aria-label="Something you'd like">
+          <input type="url" id="wantLink" maxlength="300" placeholder="Link (optional), e.g. https://…" aria-label="Link (optional)">
+          <button class="btn primary" id="addWant">Add to my list</button>
+        </div>
+        <p class="hint" id="wantStatus"></p>
+      </div>
+      ${r.calFrom && r.calTo && r.myAvail ? `<div class="card" id="calCard"><h3>📅 When are you free?</h3>
+        <p class="hint">Tap every day you could make the gift exchange. Your answers save automatically.</p>
+        ${r.date ? `<div class="banner">📌 The organiser has picked <b>${esc(nice(r.date))}</b>. You can still update your days.</div>` : ''}
+        <div id="cal"></div><p class="hint" id="calStatus"></p></div>` : ''}`;
     $('#hide').onclick = () => {
       const n = view.querySelector('.name'), hidden = n.style.visibility === 'hidden';
       n.style.visibility = hidden ? 'visible' : 'hidden'; $('#hide').textContent = hidden ? 'Hide name' : 'Show name';
     };
+
+    // Their wants (with the old free-text wishlist as a fallback).
     const theirs = await fs.getDoc(fs.doc(db, 'santa', drawId, 'wishes', r.theirWish)).catch(() => null);
-    const wl = theirs && theirs.exists() ? (theirs.data().wishlist || '').trim() : '';
-    $('#theirWish').outerHTML = wl ? `<div class="wish">${esc(wl)}</div>`
-      : `<p class="hint" id="theirWish">${esc(r.to)} hasn't written a wishlist yet. Check back later!</p>`;
+    const td = theirs && theirs.exists() ? theirs.data() : {};
+    const theirWants = (td.wants || []).filter(w => w && w.item), oldText = (td.wishlist || '').trim();
+    $('#theirWants').outerHTML = theirWants.length ? `<ul class="wants">${theirWants.map(w => { const l = safeLink(w.link);
+        return `<li><span>🎁 ${esc(w.item)}</span>${l ? `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">View ↗</a>` : ''}</li>`; }).join('')}</ul>`
+      : oldText ? `<div class="wish">${esc(oldText)}</div>`
+      : `<p class="hint">${esc(r.to)} hasn't added anything yet. Check back later!</p>`;
+
+    // My wants: every add or remove saves straight away.
     const mineRef = fs.doc(db, 'santa', drawId, 'wishes', r.myWish);
     const mine = await fs.getDoc(mineRef).catch(() => null);
-    if (mine && mine.exists()) $('#myWish').value = mine.data().wishlist || '';
-    $('#saveWish').onclick = async () => {
-      $('#saveWish').disabled = true;
-      try {
-        await fs.updateDoc(mineRef, { wishlist: $('#myWish').value.slice(0, 1000), updatedAt: fs.serverTimestamp() });
-        $('#saved').textContent = '✅ Saved. Your Santa can see it now.';
-      } catch (e) { $('#saved').textContent = '⚠️ ' + e.message; }
-      $('#saveWish').disabled = false;
+    const md = mine && mine.exists() ? mine.data() : {};
+    let wants = (md.wants || []).filter(w => w && w.item);
+    if (!wants.length && (md.wishlist || '').trim()) wants = md.wishlist.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 20).map(item => ({ item: item.slice(0, 80), link: '' }));
+    const drawWants = () => {
+      $('#myWants').innerHTML = wants.length ? wants.map((w, i) => { const l = safeLink(w.link);
+        return `<li><span>🎁 ${esc(w.item)}</span>${l ? `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">Link ↗</a>` : ''}<button data-del="${i}" aria-label="Remove ${esc(w.item)}">✕</button></li>`; }).join('')
+        : '<li class="hint"><span>Nothing yet. Add your first idea below.</span></li>';
+      $('#myWants').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { wants.splice(Number(b.dataset.del), 1); saveWants(); });
+      $('#addWant').disabled = wants.length >= 20;
     };
+    async function saveWants() {
+      drawWants();
+      $('#wantStatus').textContent = 'Saving…';
+      try { await fs.updateDoc(mineRef, { wants, updatedAt: fs.serverTimestamp() }); $('#wantStatus').textContent = '✅ Saved. Your Santa can see your list.'; }
+      catch (e) { $('#wantStatus').textContent = '⚠️ ' + e.message; }
+    }
+    const add = () => {
+      const item = $('#wantItem').value.trim().slice(0, 80), raw = $('#wantLink').value.trim().slice(0, 300);
+      if (!item) { $('#wantItem').focus(); return; }
+      if (raw && !safeLink(raw)) { $('#wantStatus').textContent = '⚠️ That link doesn\'t look right. It should start with https://'; return; }
+      wants.push({ item, link: raw ? safeLink(raw) : '' });
+      $('#wantItem').value = ''; $('#wantLink').value = ''; $('#wantItem').focus();
+      saveWants();
+    };
+    $('#addWant').onclick = add;
+    $('#wantItem').onkeydown = e => { if (e.key === 'Enter') add(); };
+    $('#wantLink').onkeydown = e => { if (e.key === 'Enter') add(); };
+    drawWants();
+
+    // Availability calendar: Monday-first months covering the organiser's date range.
+    if (!$('#calCard')) return;
+    const availRef = fs.doc(db, 'santa', drawId, 'avail', r.myAvail);
+    const av = await fs.getDoc(availRef).catch(() => null);
+    const free = new Set(av && av.exists() ? av.data().days || [] : []);
+    let saveTimer = null;
+    const drawCal = () => {
+      const from = new Date(r.calFrom + 'T12:00'), to = new Date(r.calTo + 'T12:00');
+      let html = '';
+      for (let m = new Date(from.getFullYear(), from.getMonth(), 1, 12); m <= to; m = new Date(m.getFullYear(), m.getMonth() + 1, 1, 12)) {
+        const lead = (m.getDay() + 6) % 7, daysIn = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+        html += `<div class="month"><h4>${esc(m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</h4><div class="grid7">
+          ${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="dow" aria-hidden="true">${d}</span>`).join('')}
+          ${'<span></span>'.repeat(lead)}
+          ${Array.from({ length: daysIn }, (_, i) => {
+            const day = iso(new Date(m.getFullYear(), m.getMonth(), i + 1, 12)), inRange = day >= r.calFrom && day <= r.calTo;
+            return `<button class="day${free.has(day) ? ' on' : ''}${day === r.date ? ' chosen' : ''}" data-day="${day}" ${inRange ? '' : 'disabled'}
+              aria-pressed="${free.has(day)}" aria-label="${esc(nice(day))}${free.has(day) ? ', free' : ''}">${i + 1}</button>`;
+          }).join('')}</div></div>`;
+      }
+      $('#cal').innerHTML = html;
+      $('#calStatus').textContent = free.size ? `You're free on ${free.size} day${free.size === 1 ? '' : 's'}.` : 'No days ticked yet.';
+      $('#cal').querySelectorAll('.day:not(:disabled)').forEach(b => b.onclick = () => {
+        free.has(b.dataset.day) ? free.delete(b.dataset.day) : free.add(b.dataset.day);
+        drawCal();
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async () => {
+          try { await fs.updateDoc(availRef, { days: [...free].sort(), updatedAt: fs.serverTimestamp() }); $('#calStatus').textContent += ' ✅ Saved.'; }
+          catch (e) { $('#calStatus').textContent = '⚠️ ' + e.message; }
+        }, 500);
+      });
+    };
+    drawCal();
   }
 }
 </script>

@@ -10,10 +10,24 @@ window.startBoozySanta = () => {
   const host = $('#tab-santa');
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+  // Default window for the availability calendar: 1–23 December, or the next three weeks once December has started.
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const defaultRange = () => {
+    const now = new Date();
+    if (now.getMonth() < 11) return [`${now.getFullYear()}-12-01`, `${now.getFullYear()}-12-23`];
+    return [iso(now), iso(new Date(now.getTime() + 21 * 864e5))];
+  };
   const S = Object.assign({
     event: `Secret Santa ${new Date().getFullYear()}`, budget: '€20', date: '', note: '',
-    people: '', exclusions: '', noSwaps: true, draw: null, method: 'links'
+    people: '', exclusions: '', noSwaps: true, draw: null, method: 'links',
+    calFrom: defaultRange()[0], calTo: defaultRange()[1]
   }, load());
+  const daysBetween = (from, to) => {
+    const out = [];
+    if (!from || !to || from > to) return out;
+    for (let d = new Date(from + 'T12:00'); iso(d) <= to && out.length < 120; d.setDate(d.getDate() + 1)) out.push(iso(d));
+    return out;
+  };
   let cloud = null;
   const toast = msg => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3500); };
   const token = (n = 20) => { const abc = 'abcdefghjkmnpqrstuvwxyz23456789'; return [...crypto.getRandomValues(new Uint8Array(n))].map(x => abc[x % abc.length]).join(''); };
@@ -78,6 +92,9 @@ window.startBoozySanta = () => {
           <div><label for="ssBudget">Budget</label><input type="text" id="ssBudget" value="${esc(S.budget)}" placeholder="€20"></div>
           <div><label for="ssDate">Gift exchange date</label><input type="date" id="ssDate" value="${esc(S.date)}"></div>
         </div>
+        <label>Possible dates for the get-together</label>
+        <div class="row"><input type="date" id="ssFrom" value="${esc(S.calFrom)}" style="width:auto" aria-label="From"><span class="hint">to</span><input type="date" id="ssTo" value="${esc(S.calTo)}" style="width:auto" aria-label="To"></div>
+        <p class="hint">Everyone marks the days they're free on their private page, and you pick the best one. Leave the exchange date empty until then.</p>
         <label for="ssNote">Note for everyone (optional)</label>
         <input type="text" id="ssNote" maxlength="200" value="${esc(S.note)}" placeholder="e.g. Bring your gift wrapped to the office party">
         <label class="check"><input type="checkbox" id="ssSwaps" ${S.noSwaps ? 'checked' : ''}> Don't let two people simply buy for each other</label>
@@ -101,6 +118,7 @@ window.startBoozySanta = () => {
     const read = () => {
       S.event = $('#ssEvent').value.trim() || 'Secret Santa'; S.budget = $('#ssBudget').value.trim(); S.date = $('#ssDate').value;
       S.note = $('#ssNote').value.trim(); S.noSwaps = $('#ssSwaps').checked; S.people = $('#ssPeople').value; S.exclusions = $('#ssEx').value;
+      S.calFrom = $('#ssFrom').value; S.calTo = $('#ssTo').value;
       save();
     };
     host.querySelectorAll('input, textarea').forEach(el => el.addEventListener('change', () => { read(); render(); }));
@@ -112,7 +130,7 @@ window.startBoozySanta = () => {
     const result = drawPairs(names, ex.pairs, S.noSwaps);
     if (!result) { toast('😕 No valid draw with these exclusions. Try removing one.'); return; }
     // The pairings are only kept as private per-person entries; the organiser's screen never lists them.
-    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ name: e.name, email: e.email, token: token(), wish: token(), to: result[e.name], seen: false })), online: false, opened: {} };
+    S.draw = { id: token(12), at: Date.now(), people: list.map(e => ({ name: e.name, email: e.email, token: token(), wish: token(), avail: token(), to: result[e.name], seen: false })), online: false, opened: {}, free: {} };
     save();
     if (cloud) await publish();
     render();
@@ -127,40 +145,59 @@ window.startBoozySanta = () => {
     const body = [`Hi ${p.name},`, '', `You're invited to ${S.event}! 🎁`, '',
       'Names have been drawn, and your match is waiting behind your private link. It\'s just for you, so please don\'t share it:', linkFor(p), '',
       ...(S.budget ? [`Budget: ${S.budget}`] : []), ...(fmtDate ? [`Gift exchange: ${fmtDate}`] : []), ...(S.note ? [S.note] : []),
-      '', 'On the same page you can write a wishlist for your Secret Santa.', '', 'Ho ho ho! 🎅'].join('\n');
+      '', 'On the same page you can add the things you\'d like for your Secret Santa, and mark the days you\'re free to get together.', '', 'Ho ho ho! 🎅'].join('\n');
     return `mailto:${encodeURIComponent(p.email || '')}?subject=${encodeURIComponent(`🎁 Your ${S.event} invite`)}&body=${encodeURIComponent(body)}`;
   }
   async function publish() {
     const d = S.draw, fs = cloud.fs, db = cloud.db;
     const wishOf = name => d.people.find(p => p.name === name).wish;
+    d.people.forEach(p => { p.avail = p.avail || token(); });
     try {
       await fs.setDoc(fs.doc(db, 'santa', d.id), { hostUid: cloud.user.uid, event: S.event, createdAt: fs.serverTimestamp() });
       await Promise.all(d.people.flatMap(p => [
         fs.setDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token), {
           name: p.name, to: p.to, event: S.event, budget: S.budget, date: S.date, note: S.note,
-          myWish: p.wish, theirWish: wishOf(p.to), openedAt: null
+          myWish: p.wish, theirWish: wishOf(p.to), myAvail: p.avail, calFrom: S.calFrom || '', calTo: S.calTo || '', openedAt: null
         }),
-        fs.setDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish), { name: p.name, wishlist: '', updatedAt: null })
+        fs.setDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish), { name: p.name, wishlist: '', wants: [], updatedAt: null }),
+        fs.setDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail), { name: p.name, days: [], updatedAt: null })
       ]));
-      d.online = true; save();
+      d.online = true; d.calReady = true; save();
     } catch (e) { toast('⚠️ Couldn\'t create the private links: ' + e.message); }
+  }
+  // Push the date range / chosen date to everyone's page. Draws made before the calendar existed
+  // get their calendar entries here, so links that were already sent keep working.
+  async function pushDates() {
+    const d = S.draw, fs = cloud.fs, db = cloud.db;
+    const fresh = d.people.filter(p => !p.avail || !d.calReady);
+    d.people.forEach(p => { p.avail = p.avail || token(); });
+    await Promise.all(fresh.map(p => fs.setDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail), { name: p.name, days: [], updatedAt: null }, { merge: true })));
+    await Promise.all(d.people.map(p => fs.updateDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token),
+      { date: S.date || '', calFrom: S.calFrom || '', calTo: S.calTo || '', myAvail: p.avail })));
+    d.calReady = true; save();
   }
   async function unpublish(d) {
     if (!cloud || !d || !d.online) return;
     const fs = cloud.fs, db = cloud.db;
     await Promise.all(d.people.flatMap(p => [
-      fs.deleteDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token)), fs.deleteDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish))
+      fs.deleteDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token)), fs.deleteDoc(fs.doc(db, 'santa', d.id, 'wishes', p.wish)),
+      ...(p.avail ? [fs.deleteDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail))] : [])
     ])).catch(() => {});
     await fs.deleteDoc(fs.doc(db, 'santa', d.id)).catch(() => {});
   }
-  // Who has opened their link (never what it says).
+  // Who has opened their link (never what it says) and which days everyone is free.
   async function refreshOpened() {
     if (!cloud || !S.draw || !S.draw.online) return;
-    const fs = cloud.fs, db = cloud.db;
-    await Promise.all(S.draw.people.map(async p => {
-      try { const snap = await fs.getDoc(fs.doc(db, 'santa', S.draw.id, 'reveals', p.token)); S.draw.opened[p.name] = !!(snap.exists() && snap.data().openedAt); } catch {}
+    const fs = cloud.fs, db = cloud.db, d = S.draw;
+    if (!d.calReady) { try { await pushDates(); } catch {} }
+    d.free = d.free || {};
+    await Promise.all(d.people.map(async p => {
+      try { const snap = await fs.getDoc(fs.doc(db, 'santa', d.id, 'reveals', p.token)); d.opened[p.name] = !!(snap.exists() && snap.data().openedAt); } catch {}
+      if (p.avail) {
+        try { const a = await fs.getDoc(fs.doc(db, 'santa', d.id, 'avail', p.avail)); if (a.exists()) d.free[p.name] = { days: a.data().days || [], answered: !!a.data().updatedAt }; } catch {}
+      }
     }));
-    save(); if ($('#ssLinks')) renderDraw();
+    save(); if ($('#ssLinks') || $('#ssCal')) renderDraw();
   }
 
   // ---------- After the draw ----------
@@ -177,7 +214,9 @@ window.startBoozySanta = () => {
         <p class="hint mt">🤫 The names are drawn. Choose how each person finds out who they're buying for:</p>
         <div class="seg">${tabs.map(([id, n]) => `<button class="${S.method === id ? 'active' : ''}" data-method="${id}">${n}</button>`).join('')}</div>
       </div>
-      <div class="mt" id="ssBody"></div>`;
+      <div class="mt" id="ssBody"></div>
+      <div class="mt" id="ssCalWrap"></div>`;
+    renderCalendar();
     host.querySelectorAll('[data-method]').forEach(b => b.onclick = () => { S.method = b.dataset.method; save(); renderDraw(); });
     $('#ssReset').onclick = async () => {
       if (!confirm('Start over? The current draw and any private links will be deleted.')) return;
@@ -201,7 +240,7 @@ window.startBoozySanta = () => {
         body.innerHTML = `<div class="card" id="ssLinks">
           <div class="row" style="justify-content:space-between"><h2 style="margin:0">📱 Private links</h2>
             <span class="row"><span class="pill ${opened === d.people.length ? 'ok' : 'warn'}">${opened} of ${d.people.length} opened</span><button class="btn" id="ssRefresh">↻ Refresh</button></span></div>
-          <p class="hint">Send each person their own invite. <b>✉️ Email</b> opens your email app with the invite ready to send. Their link only shows who <i>they're</i> buying for, and lets them write a wishlist for their Santa.</p>
+          <p class="hint">Send each person their own invite. <b>✉️ Email</b> opens your email app with the invite ready to send. Their link only shows who <i>they're</i> buying for. There they can add the things they'd like and mark the days they're free.</p>
           <div class="sslinks">${d.people.map((p, i) => `<div class="sslink">
             <b>${esc(p.name)}${p.email ? `<small class="hint"> · ${esc(p.email)}</small>` : ''}</b>${d.opened[p.name] ? '<span class="pill ok">opened ✓</span>' : '<span class="pill">not opened</span>'}
             <span class="row">
@@ -226,6 +265,61 @@ window.startBoozySanta = () => {
         <button class="btn primary" id="ssPrint">🖨️ Print slips</button></div>`;
       $('#ssPrint').onclick = printSlips;
     }
+  }
+
+  // ---------- Availability ----------
+  let selDay = null;
+  // Pick black or white text for a calendar cell, whichever contrasts more with its heat colour.
+  function inkFor(heatPct) {
+    const css = getComputedStyle(document.documentElement);
+    const rgb = v => { const h = v.trim().replace('#', ''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+    const lum = c => { const l = c.map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2]; };
+    const a = rgb(css.getPropertyValue('--accent')), b = rgb(css.getPropertyValue('--bg'));
+    if (a.some(isNaN) || b.some(isNaN)) return '';
+    const L = lum(a.map((v, i) => Math.round(v * heatPct / 100 + b[i] * (1 - heatPct / 100))));
+    return (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? '#000' : '#fff';
+  }
+  function renderCalendar() {
+    const wrap = $('#ssCalWrap'), d = S.draw;
+    if (!wrap || !cloud || !d.online) { if (wrap) wrap.innerHTML = ''; return; }
+    const days = daysBetween(S.calFrom, S.calTo), n = d.people.length, free = d.free || {};
+    const freeOn = day => d.people.filter(p => free[p.name] && free[p.name].days.includes(day)).map(p => p.name);
+    const counts = days.map(day => freeOn(day).length), max = Math.max(0, ...counts);
+    const answered = d.people.filter(p => free[p.name] && free[p.name].answered).length;
+    const label = (day, opts) => new Date(day + 'T12:00').toLocaleDateString(undefined, opts);
+    if (selDay && !days.includes(selDay)) selDay = null;
+    wrap.innerHTML = `<div class="card" id="ssCal">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">📅 When is everyone free?</h2>
+        <span class="row"><span class="pill ${answered === n ? 'ok' : 'warn'}">${answered} of ${n} answered</span><button class="btn" id="ssCalRefresh">↻ Refresh</button></span></div>
+      <p class="hint">Everyone ticks the days they're free on their private page. The darker the day, the more people can make it. Tap a day to see who's free and set it as the exchange date.</p>
+      <div class="row"><input type="date" id="ssCalFrom" value="${esc(S.calFrom)}" style="width:auto" aria-label="Possible dates from"><span class="hint">to</span>
+        <input type="date" id="ssCalTo" value="${esc(S.calTo)}" style="width:auto" aria-label="Possible dates to"><button class="btn" id="ssCalSave">Update dates</button></div>
+      ${days.length ? `<div class="sscal">${days.map((day, i) => {
+        const c = counts[i], pct = n ? Math.round(100 * c / n) : 0;
+        const heat = c ? 12 + Math.round(70 * c / n) : 0;
+        return `<button class="ssday${max && c === max ? ' best' : ''}${day === selDay ? ' sel' : ''}${day === S.date ? ' chosen' : ''}" data-day="${day}"
+          style="--heat:${heat}%;color:${inkFor(heat)}" title="${esc(label(day, { weekday: 'long', day: 'numeric', month: 'long' }))}: ${c} of ${n} free">
+          <small>${esc(label(day, { weekday: 'short' }))}</small><b>${esc(label(day, { day: 'numeric', month: 'short' }))}</b><span>${max && c === max ? '⭐ ' : ''}${c}/${n}</span></button>`;
+      }).join('')}</div>` : '<p class="pill warn mt">Choose a valid date range.</p>'}
+      ${selDay ? (() => { const who = freeOn(selDay), not = d.people.map(p => p.name).filter(x => !who.includes(x));
+        return `<div class="ssdaydetail mt"><h3>${esc(label(selDay, { weekday: 'long', day: 'numeric', month: 'long' }))}</h3>
+          <p>✅ Free: ${who.length ? who.map(esc).join(', ') : '<span class="hint">nobody yet</span>'}</p>
+          ${not.length ? `<p class="hint">Not free or not answered: ${not.map(esc).join(', ')}</p>` : ''}
+          ${selDay === S.date ? '<p class="pill ok">📌 This is the exchange date</p>' : `<button class="btn primary" id="ssPick">📌 Make this the exchange date</button>`}</div>`; })() : ''}
+    </div>`;
+    $('#ssCalRefresh').onclick = refreshOpened;
+    wrap.querySelectorAll('[data-day]').forEach(b => b.onclick = () => { selDay = b.dataset.day === selDay ? null : b.dataset.day; renderCalendar(); });
+    $('#ssCalSave').onclick = async () => {
+      S.calFrom = $('#ssCalFrom').value; S.calTo = $('#ssCalTo').value; save();
+      try { await pushDates(); toast('📅 Dates updated on everyone\'s page'); } catch (e) { toast('⚠️ ' + e.message); }
+      renderDraw();
+    };
+    const pick = $('#ssPick');
+    if (pick) pick.onclick = async () => {
+      S.date = selDay; save();
+      try { await pushDates(); toast(`📌 Exchange date set: ${label(selDay, { weekday: 'long', day: 'numeric', month: 'long' })}`); } catch (e) { toast('⚠️ ' + e.message); }
+      renderDraw();
+    };
   }
 
   function overlay(html) {
@@ -265,7 +359,8 @@ window.startBoozySanta = () => {
 
   window.boozySanta = {
     render,
-    connect(ctx) { cloud = ctx; if (S.draw && S.draw.online) refreshOpened(); },
+    // Sign-in finishes after the first render, so redraw with the online features, then fetch the latest.
+    connect(ctx) { cloud = ctx; render(); if (S.draw && S.draw.online) refreshOpened(); },
     _draw: drawPairs // exposed for testing the draw logic
   };
   render();
